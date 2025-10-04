@@ -8,7 +8,7 @@ import lookupTables as lt
 from scipy.interpolate import RegularGridInterpolator, interp2d
 
 
-def bending_stress(wp,  n1, Pnd, Np1, Np2, Helix):
+def bending_stress(wp,  n1, Pnd, Np1, Helix):
     # Input validation
     if not (1200 <= wp <= 3600):        #wp = input speed in RPM
         raise ValueError("wp (input speed) should be between 1200 and 3600 RPM.")
@@ -18,8 +18,8 @@ def bending_stress(wp,  n1, Pnd, Np1, Np2, Helix):
         raise ValueError("Pnd (Normal diametral pitch) must be one of: 4, 5, 6, 8, 10.")
     if not (10 <= Np1 <= 100):          #Np1 = pinion teeth number stage 1
         raise ValueError("Np1 (pinion teeth number stage 1) should be between 10 and 100.")
-    if not (10 <= Np2 <= 100):          #Np2 = pinion teeth number stage 2
-        raise ValueError("Np2 (pinion teeth number stage 2) should be between 10 and 100.")
+#    if not (10 <= Np2 <= 100):          #Np2 = pinion teeth number stage 2
+#        raise ValueError("Np2 (pinion teeth number stage 2) should be between 10 and 100.")
     if Helix not in [15, 20, 25]:       #Helix = helix angle (degrees)
         raise ValueError("Helix (helix angle) should be 15, 20, or 25 degrees.")
       
