@@ -14,8 +14,8 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
         raise ValueError("wp (input speed) should be between 1200 and 3600 RPM.")
     if not (1 <= n1 <= 10):             #n1 = stage 1 input ratio
         raise ValueError("n1 (stage 1 input ratio) should be between 1 and 10.")
-    if Pnd not in [4, 5, 6, 8, 10]:     #Pnd = Normal diametral pitch (teeth/inch)
-        raise ValueError("Pnd (Normal diametral pitch) must be one of: 4, 5, 6, 8, 10.")
+#    if Pnd not in [4, 5, 6, 8, 10]:     #Pnd = Normal diametral pitch (teeth/inch)
+#        raise ValueError("Pnd (Normal diametral pitch) must be one of: 4, 5, 6, 8, 10.")
     if not (10 <= Np1 <= 100):          #Np1 = pinion teeth number stage 1
         raise ValueError("Np1 (pinion teeth number stage 1) should be between 10 and 100.")
 #    if not (10 <= Np2 <= 100):          #Np2 = pinion teeth number stage 2
