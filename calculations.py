@@ -14,8 +14,8 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
         raise ValueError("wp (input speed) should be between 1200 and 3600 RPM.")
     if not (1 <= n1 <= 10):             #n1 = stage 1 input ratio
         raise ValueError("n1 (stage 1 input ratio) should be between 1 and 10.")
-#    if Pnd not in [4, 5, 6, 8, 10]:     #Pnd = Normal diametral pitch (teeth/inch)
-#        raise ValueError("Pnd (Normal diametral pitch) must be one of: 4, 5, 6, 8, 10.")
+    if Pnd not in [4, 5, 6, 8, 10]:     #Pnd = Normal diametral pitch (teeth/inch)
+        raise ValueError("Pnd (Normal diametral pitch) must be one of: 4, 5, 6, 8, 10.")
     if not (10 <= Np1 <= 100):          #Np1 = pinion teeth number stage 1
         raise ValueError("Np1 (pinion teeth number stage 1) should be between 10 and 100.")
 #    if not (10 <= Np2 <= 100):          #Np2 = pinion teeth number stage 2
@@ -23,7 +23,6 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
     if Helix not in [15, 20, 25]:       #Helix = helix angle (degrees)
         raise ValueError("Helix (helix angle) should be 15, 20, or 25 degrees.")
       
-
     ''' Important Values '''
     P= wp / 240                                               #input power in HP
     Pd= Pnd * numpy.cos(numpy.radians(Helix))                 #Diametral pitch in teeth/inch               
@@ -38,7 +37,6 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
     vt1= numpy.pi * Dp1 * wp / 12                             #pitch line velocity in ft/s
 
     Kv=(c.C/(c.C+numpy.sqrt(vt1)))**(-c.B)                    #Dynamic factor
-
 
     Wt1= 33000 * P / vt1                                      #Tangential load in lbf
 
@@ -100,6 +98,9 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
     sat = 36.8403
     print(fn.distance(st1_, sat),'%')
     return st1_                                               # in ksi
+
+
+
 '''
 def contact_stress(F, P, b, d, C, I):
     """

@@ -3,14 +3,14 @@ import pandas as pd
 from typing import Literal
 
 
-ko_Weight = Literal["Uniform"] | Literal["Light"] | Literal["Moderate"] | Literal["Heavy"]
+ko_Weight = Literal["Uniform", "Light", "Medium", "Heavy"]
 def ko_menu(output: ko_Weight, input: ko_Weight):
     match f"{output}/{input}":
         case "Uniform/Uniform":
             return 1
         case "Uniform/Light":
             return 1.25
-        case "Uniform/Moderate":
+        case "Uniform/Medium":
             return 1.5
         case "Uniform/Heavy":
             return 1.75
@@ -41,16 +41,17 @@ def ko_menu(output: ko_Weight, input: ko_Weight):
         case _:
             raise ValueError("Invalid input combination for K0 factor.")
         
-# Kr_weight = 0.9 | 0.99 | 0.999 | 0.9999
-def Kr_menu(quality: float):
+
+Kr_weight = Literal["0.9", "0.99", "0.999", "0.9999"]        
+def Kr_menu(quality: Kr_weight):
     match quality:
-        case 0.9:
+        case "0.9":
             return 0.85
-        case 0.99:
+        case "0.99":
             return 1
-        case 0.999:
+        case "0.999":
             return 1.25
-        case 0.9999:
+        case "0.9999":
             return 1.5
         case _:
             raise ValueError("wrong value bucko")
@@ -89,7 +90,7 @@ def Design_Life(use: DL):
         case _:
             raise ValueError("Invalid input for Design Life.")
 
-Avs = Literal["Av6"] | Literal["Av7"] | Literal["Av8"] | Literal["Av9"] | Literal["Av10"] | Literal["Av11"] | Literal["Av12"]
+Avs = Literal["Av6", "Av7", "Av8", "Av9", "Av10", "Av11", "Av12"]
 def B_menu(AVs: Avs):
     match AVs:
         case "Av6":
