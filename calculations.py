@@ -101,7 +101,7 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
 
 
 
-'''
+
 def contact_stress(F, P, b, d, C, I):
     """
     Calculate contact stress using the AGMA formula.
@@ -127,4 +127,3 @@ def contact_stress(F, P, b, d, C, I):
     sigma_c = C * ((F_lbf * P_in) / (b_in * d_in * I))**0.5
     
     return sigma_c  # in psi
-'''
