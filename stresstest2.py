@@ -21,7 +21,7 @@ VARIABLES = {
     "n1":   numpy.arange(1, 9.1, 0.1),
 
     # Pnd: normal diametral pitch (list of discrete choices)
-    "Pnd":  [4, 5, 6, 8, 10, 12, 16, 20, 22, 25],
+    "Pnd":  [4, 5, 6, 8, 10],
 
     # Np1: pinion teeth
     "Np1":  range(10, 101, 1),
