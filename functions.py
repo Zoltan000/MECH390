@@ -21,10 +21,10 @@ def xlookup(lookup_value, csv_path):
 
 
 
-def distance(sigma_b, sigma_c):
+def distance(a, b):
     """
     assumin b and c are percentages (0-100)
     calculates the successfullness of the output
     """
-    
-    return (abs(100-sigma_b) + abs(100-sigma_c)) /2
+
+    return ((abs(a - b) / ((a + b) / 2)) * 100)

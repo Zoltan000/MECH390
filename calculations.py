@@ -93,17 +93,13 @@ def bending_stress(wp,  n1, Pnd, Np1, Np2, Helix):
     Km= 1 + Cma + Cpf
     
     st1= c.Ko * c.Ks * Km * c.Kb * Wt1 * Kv * Pd / (F * J)    #Bending stress in psi
-    print("st1= ",st1)
     Nc1=wp * c.L * 60                                         #number of cycles for stage 1
     Yn1=1.3558*Nc1**-0.0178                                   #Bending cycle factor for stage 1
 
-    print("c.SF= ",c.SF)
-    print("c.Kr= ",c.Kr)
-    print("Yn1= ",Yn1)
-
     st1_ = st1 * c.SF * c.Kr / (1000*Yn1)                     #Bending stress for stage 1 in ksi
-    print("st1'= ",st1_)
-    return st1_  # in psi
+    sat = 36.8403
+    print(fn.distance(st1_, sat),'%')
+    return st1_                                               # in ksi
 '''
 def contact_stress(F, P, b, d, C, I):
     """
