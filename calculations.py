@@ -90,7 +90,7 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
     Cpf= F / (10 * Dp1) - 0.0375 + 0.0125 * F if F > 1 else F / (10 * Dp1) - 0.025
     Km= 1 + Cma + Cpf
     
-    st1= c.Ko * c.Ks * Km * c.Kb * Wt1 * Kv * Pd / (F * J)    #Bending stress in psi
+    st1= c.Ko * c.Ks * Km * c.Kb * Wt1 * Kv * Pd / (F * J)    #Bending stress in ksi
     Nc1=wp * c.L * 60                                         #number of cycles for stage 1
     Yn1=1.3558*Nc1**-0.0178                                   #Bending cycle factor for stage 1
 
