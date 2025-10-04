@@ -68,8 +68,8 @@ DL = Literal[
     "Critical equipment in continuous 24-h operation"
 ]
 
-def Design_Life(input: DL):
-    match input:
+def Design_Life(use: DL):
+    match use:
         case "Domestic":
             return 1500
         case "Aircraft Engines":
@@ -88,3 +88,23 @@ def Design_Life(input: DL):
             return 150000
         case _:
             raise ValueError("Invalid input for Design Life.")
+
+Avs = Literal["Av6"] | Literal["Av7"] | Literal["Av8"] | Literal["Av9"] | Literal["Av10"] | Literal["Av11"] | Literal["Av12"]
+def B_menu(AVs: Avs):
+    match AVs:
+        case "Av6":
+            return 6
+        case "Av7":
+            return 7
+        case "Av8":
+            return 8
+        case "Av9":
+            return 9
+        case "Av10":
+            return 10
+        case "Av11":
+            return 11
+        case "Av12":
+            return 12
+        case _:
+            raise ValueError("Invalid AV value.")

@@ -2,6 +2,7 @@ import numpy
 import pandas as pd
 from typing import Literal
 
+''' Right now this is useless
 
 def xlookup(lookup_value, csv_path):
     """
@@ -15,7 +16,7 @@ def xlookup(lookup_value, csv_path):
         return match.iloc[0][return_column]
     else:
         return None  # or raise an error if preferred
-    
+'''    
 
 
 

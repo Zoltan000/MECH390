@@ -3,10 +3,13 @@ import pandas as pd
 import lookupTables as lt
 
 # Constants that don't change
-L=lt.Design_Life("Domestic")                #design life in [insert unit]
-
+L=lt.Design_Life("Electric motors, industrial blowers, general industrial machines")       #design life in [insert unit]
+Ks=1                                 #Size Factor (Assuming Pd always > 5)
+Kb=1                                 #Rim Thickness Factor (Assuming solid gears)
 
 # Constants that do change
-SF=1                    #Service Factor (pick a number between 1 and 1.5)
-ko=lt.ko_menu("Light", "Light")
-Kr=lt.Kr_menu(0.99)
+SF=1                                 #Service Factor (pick a number between 1 and 1.5)
+Ko=lt.ko_menu("Light", "Light")      #Overload Factor (pick a combination from the table)
+Kr=lt.Kr_menu(0.999)                  #Reliability Factor (pick a number from the table)
+B= 0.25*(lt.B_menu("Av7")-5)**0.667   #who knows what these are
+C=50+56*(1-B)                        #Antony never labeled them in the excel
