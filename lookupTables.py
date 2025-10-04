@@ -1,0 +1,90 @@
+import numpy
+import pandas as pd
+from typing import Literal
+
+
+ko_Weight = Literal["Uniform"] | Literal["Light"] | Literal["Moderate"] | Literal["Heavy"]
+def ko_menu(output: ko_Weight, input: ko_Weight):
+    match f"{output}/{input}":
+        case "Uniform/Uniform":
+            return 1
+        case "Uniform/Light":
+            return 1.25
+        case "Uniform/Moderate":
+            return 1.5
+        case "Uniform/Heavy":
+            return 1.75
+        case "Light/Uniform":
+            return 1.2
+        case "Light/Light":
+            return 1.4
+        case "Light/Medium":
+            return 1.75
+        case "Light/Heavy":
+            return 2.25
+        case "Medium/Uniform":
+            return 1.3
+        case "Medium/Light":
+            return 1.7
+        case "Medium/Medium":
+            return 2
+        case "Medium/Heavy":
+            return 2.75
+        case "Heavy/Uniform":
+            return 1.4
+        case "Heavy/Light":
+            return 2
+        case "Heavy/Medium":
+            return 2.5
+        case "Heavy/Heavy":
+            return 3.25
+        case _:
+            raise ValueError("Invalid input combination for K0 factor.")
+        
+# Kr_weight = 0.9 | 0.99 | 0.999 | 0.9999
+def Kr_menu(quality: float):
+    match quality:
+        case 0.9:
+            return 0.85
+        case 0.99:
+            return 1
+        case 0.999:
+            return 1.25
+        case 0.9999:
+            return 1.5
+        case _:
+            raise ValueError("wrong value bucko")
+
+
+
+DL = Literal[
+    "Domestic",
+    "Aircraft Engines",
+    "Automotive",
+    "Agricultural Equipment",
+    "Elevators, industrial fans, multipurpose gearing",
+    "Electric motors, industrial blowers, general industrial machines",
+    "Pumps and compressors",
+    "Critical equipment in continuous 24-h operation"
+]
+
+def Design_Life(input: DL):
+    match input:
+        case "Domestic":
+            return 1500
+        case "Aircraft Engines":
+            return 3000
+        case "Automotive":
+            return 3500
+        case "Agricultural Equipment":
+            return 5000
+        case "Elevators, industrial fans, multipurpose gearing":
+            return 12000
+        case "Electric motors, industrial blowers, general industrial machines":
+            return 25000
+        case "Pumps and compressors":
+            return 50000
+        case "Critical equipment in continuous 24-h operation":
+            return 150000
+        case _:
+            raise ValueError("Invalid input for Design Life.")
