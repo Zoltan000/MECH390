@@ -22,9 +22,4 @@ def xlookup(lookup_value, csv_path):
 
 
 def distance(a, b):
-    """
-    assumin b and c are percentages (0-100)
-    calculates the successfullness of the output
-    """
-
     return ((abs(a - b) / ((a + b) / 2)) * 100)
