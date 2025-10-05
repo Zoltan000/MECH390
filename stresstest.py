@@ -49,13 +49,13 @@ def main():
 
         sigma = c.bending_stress(**params)       # <-- YOUR function
         pdiff = fn.distance(sigma, sat)          # signed %
-        key = -abs(pdiff)                                    # negative so min-heap pops worst when >K
+        key = -abs(pdiff)                        # negative so min-heap pops worst when >K
 
         if len(heap) < TOP_K:
-            heapq.heappush(heap, (key, pdiff, sigma, params))
+            heapq.heappush(heap, (key, pdiff, sigma, checked, params))
         else:
             # push new; if worse than current K best, it will be popped immediately
-            heapq.heappush(heap, (key, pdiff, sigma, params))
+            heapq.heappush(heap, (key, pdiff, sigma, checked, params))
             if len(heap) > TOP_K:
                 heapq.heappop(heap)
 
@@ -72,8 +72,16 @@ def main():
     with open(OUT_CSV, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(names + ["sigma_bend", "percent_diff", "abs_percent_diff"])
-        for _, pdiff, sigma, params in winners:
-            w.writerow([params[k] for k in names] + [sigma, pdiff, abs(pdiff)])
+        for _, pdiff, sigma, _, params in winners:
+            row = []
+            for k in names:
+                if k == "n1":
+                    # Format n1 to 1 decimal place, remove trailing zeros
+                    row.append(f"{params[k]:.1f}".rstrip('0').rstrip('.') if '.' in f"{params[k]:.1f}" else f"{params[k]:.1f}")
+                else:
+                    row.append(params[k])
+            row += [sigma, pdiff, abs(pdiff)]
+            w.writerow(row)
 
     elapsed = time.time() - t0
     print(f"\nDone. Checked {checked:,} combos in {elapsed:.1f}s.")

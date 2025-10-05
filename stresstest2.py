@@ -24,7 +24,7 @@ VARIABLES = {
     "Pnd":  [4, 5, 6, 8, 10],
 
     # Np1: pinion teeth
-    "Np1":  range(10, 101, 1),
+    "Np1":  range(10, 101, 2),
 
     # Helix: degrees (floats)
     "Helix": [15, 20, 25],
@@ -74,8 +74,15 @@ def main():
         w.writerow(names + ["sigma_bend", "percent_diff", "abs_percent_diff"])
         for wp in sorted(best_per_wp):
             row = best_per_wp[wp]
-            w.writerow([row[k] for k in names] +
-                       [row["sigma_bend"], row["percent_diff"], row["abs_percent_diff"]])
+            output = []
+            for k in names:
+                if k == "n1":
+                    # Format n1 to 1 decimal place, remove trailing zeros if needed
+                    output.append(f"{row[k]:.1f}".rstrip('0').rstrip('.') if '.' in f"{row[k]:.1f}" else f"{row[k]:.1f}")
+                else:
+                    output.append(row[k])
+            output += [row["sigma_bend"], row["percent_diff"], row["abs_percent_diff"]]
+            w.writerow(output)
 
     print(f"\nDone. Checked {checked:,} combinations in {elapsed:.2f}s "
           f"({checked/elapsed:,.0f} combos/s).")
