@@ -9,7 +9,7 @@ import functions as fn
 
 
 sat = 36.8403  
-
+sac = 129.242  # <-- Set your allowable contact (pitting) stress here
 
 VARIABLES = {
     # wp: input rpm (integers)
@@ -40,22 +40,26 @@ def main():
     domains = [list(VARIABLES[k]) for k in names]
     combos = itertools.product(*domains)
 
-    heap = []  # will store tuples (-abs_pct_diff, pct_diff, sigma, params_dict)
+    heap = []  # will store tuples (combined_metric, bending_pdiff, contact_pdiff, sigma_bend, sigma_contact, checked, params)
     checked = 0
     t0 = time.time()
 
     for values in combos:
         params = dict(zip(names, values))
 
-        sigma = c.bending_stress(**params)       # <-- YOUR function
-        pdiff = fn.distance(sigma, sat)          # signed %
-        key = -abs(pdiff)                        # negative so min-heap pops worst when >K
+        sigma_bend = c.bending_stress(**params)
+        sigma_contact = c.contact_stress(**params)
+
+        bend_pdiff = fn.distance(sigma_bend, sat)
+        contact_pdiff = fn.distance(sigma_contact, sac)
+
+        combined_metric = abs(bend_pdiff) + abs(contact_pdiff)
+        neg_metric = -combined_metric  # Negate for max-heap
 
         if len(heap) < TOP_K:
-            heapq.heappush(heap, (key, pdiff, sigma, checked, params))
+            heapq.heappush(heap, (neg_metric, bend_pdiff, contact_pdiff, sigma_bend, sigma_contact, checked, params))
         else:
-            # push new; if worse than current K best, it will be popped immediately
-            heapq.heappush(heap, (key, pdiff, sigma, checked, params))
+            heapq.heappush(heap, (neg_metric, bend_pdiff, contact_pdiff, sigma_bend, sigma_contact, checked, params))
             if len(heap) > TOP_K:
                 heapq.heappop(heap)
 
@@ -63,24 +67,32 @@ def main():
         if checked % 100000 == 0:
             elapsed = time.time() - t0
             rate = checked / max(1.0, elapsed)
-            print(f"checked={checked:,}  rate={rate:,.0f}/s  best|%diff|={abs(heap[0][0]):.6f}")
+            print(f"checked={checked:,}  rate={rate:,.0f}/s  best_combined_metric={-heap[0][0]:.6f}")
 
-    # Collect winners in ascending |%diff|
-    winners = sorted(heap, key=lambda x: abs(x[1]))
+    # Collect winners in ascending combined metric
+    winners = sorted(heap, key=lambda x: -x[0])
 
     # Write CSV
     with open(OUT_CSV, "w", newline="") as f:
         w = csv.writer(f)
-        w.writerow(names + ["sigma_bend", "percent_diff", "abs_percent_diff"])
-        for _, pdiff, sigma, _, params in winners:
+        w.writerow(
+            names +
+            ["sigma_bend", "bending_percent_diff", "abs_bending_percent_diff",
+             "sigma_contact", "contact_percent_diff", "abs_contact_percent_diff",
+             "combined_metric"]
+        )
+        for neg_metric, bend_pdiff, contact_pdiff, sigma_bend, sigma_contact, _, params in winners:
             row = []
             for k in names:
                 if k == "n1":
-                    # Format n1 to 1 decimal place, remove trailing zeros
                     row.append(f"{params[k]:.1f}".rstrip('0').rstrip('.') if '.' in f"{params[k]:.1f}" else f"{params[k]:.1f}")
                 else:
                     row.append(params[k])
-            row += [sigma, pdiff, abs(pdiff)]
+            row += [
+                sigma_bend, bend_pdiff, abs(bend_pdiff),
+                sigma_contact, contact_pdiff, abs(contact_pdiff),
+                -neg_metric  # Convert back to positive
+            ]
             w.writerow(row)
 
     elapsed = time.time() - t0

@@ -15,8 +15,8 @@ def important_values(wp,  n1, Pnd, Np1, Helix):
         raise ValueError("wp (input speed) should be between 1200 and 3600 RPM.")
     if not (1 <= n1 <= 10):             #n1 = stage 1 input ratio
         raise ValueError("n1 (stage 1 input ratio) should be between 1 and 10.")
-    if Pnd not in [4, 5, 6, 8, 10]:     #Pnd = Normal diametral pitch (teeth/inch)
-        raise ValueError("Pnd (Normal diametral pitch) must be one of: 4, 5, 6, 8, 10.")
+    # if Pnd not in [4, 5, 6, 8, 10]:     #Pnd = Normal diametral pitch (teeth/inch)
+        # raise ValueError("Pnd (Normal diametral pitch) must be one of: 4, 5, 6, 8, 10.")
     if not (10 <= Np1 <= 100):          #Np1 = pinion teeth number stage 1
         raise ValueError("Np1 (pinion teeth number stage 1) should be between 10 and 100.")
     if Helix not in [15, 20, 25]:       #Helix = helix angle (degrees)
@@ -55,16 +55,15 @@ def intermediary_calculations(wp,  n1, Pnd, Np1, Helix):
     Km= 1 + Cma + Cpf
 
     Nc1=wp * c.L * 60                                         #number of cycles for stage 1
-    Yn1=1.3558*Nc1**-0.0178                                   #Bending cycle factor for stage 1
 
-    return Ng1, Dp1, vt1, Kv, Wt1, Px, F, Km, Yn1
+    return Ng1, Dp1, vt1, Kv, Wt1, Px, F, Km, Nc1
 
 
 
 
 def bending_stress(wp,  n1, Pnd, Np1, Helix):
     P, Pd, wf, n, n2 = important_values(wp,  n1, Pnd, Np1, Helix)  # Call to cache important values 
-    Ng1, Dp1, vt1, Kv, Wt1, Px, F, Km, Yn1 = intermediary_calculations(wp,  n1, Pnd, Np1, Helix)  # Call to cache intermediary calculations
+    Ng1, Dp1, vt1, Kv, Wt1, Px, F, Km, Nc1 = intermediary_calculations(wp,  n1, Pnd, Np1, Helix)  # Call to cache intermediary calculations
 
     ''' Gepmetry factor J calculation '''
     # J_base 2D interpolation
@@ -109,10 +108,12 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
     J=J_base * K                                              #Geometry factor
 
     ''' Bending Stress Calculation '''
+    Yn1=1.3558*Nc1**-0.0178                                   #Bending cycle factor for stage 1
+    
     st1= c.Ko * c.Ks * Km * c.Kb * Wt1 * Kv * Pd / (F * J)    #Bending stress in ksi
     st1_ = st1 * c.SF * c.Kr / (1000*Yn1)                     #Bending stress for stage 1 in ksi
     sat = 36.8403
-    print(fn.distance(st1_, sat),'%')
+    # print(fn.distance(st1_, sat),'%')
     return st1_                                               # in ksi
 
 
@@ -120,7 +121,7 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
 
 def contact_stress(wp,  n1, Pnd, Np1, Helix):
     P, Pd, wf, n, n2 = important_values(wp,  n1, Pnd, Np1, Helix)                            # Call to cache important values
-    Ng1, Dp1, vt1, Kv, Wt1, Px, F, Km, Yn1 = intermediary_calculations(wp,  n1, Pnd, Np1, Helix)  # Call to cache intermediary calculations
+    Ng1, Dp1, vt1, Kv, Wt1, Px, F, Km, Nc1 = intermediary_calculations(wp,  n1, Pnd, Np1, Helix)  # Call to cache intermediary calculations
 
     Dg1= Ng1 / Pd                                           #gear pitch diameter stage 1 in inches
     
@@ -140,8 +141,10 @@ def contact_stress(wp,  n1, Pnd, Np1, Helix):
     I= (numpy.cos(Tpressure) * numpy.sin(Tpressure) * n1) / (2 * mN * (n1 + 1))        #Pitting resistance factor
     
     ''' Contact Stress Calculation '''
+    Zn1= 1.4488 * Nc1**-0.023                                                          #Contact cycle factor for stage 1
+    
     sc1= c.Cp * numpy.sqrt((Wt1 * c.Ko * c.Ks * Km * Kv)/(F * Dp1 * I))                #Contact stress in ksi
-    sc1_= sc1 * c.SF * c.Kr / (1000 * Yn1)                                              #Contact stress for stage 1 in ksi
-    sac = 112.931
-    print(fn.distance(sc1_, sac),'%')
-    return sc1_                                                                           # in ksi
+    sc1_= sc1 * c.SF * c.Kr / (1000 * Zn1)                                             #Contact stress for stage 1 in ksi
+    sac = 129.242
+    # print(fn.distance(sc1_, sac),'%')
+    return sc1_  # in ksi
