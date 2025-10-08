@@ -16,19 +16,24 @@ sac = 129.242
 # -------------------------
 VARIABLES = {
     # wp: input rpm (integers) 1200..3600 inclusive step 200
-    "wp":   range(1200, 3601, 100),
+    "wp":   range(1200, 3601, 400),
 
     # n1: stage 1 ratio (floats)
-    "n1":   numpy.arange(1, 9.1, 0.1),
+    "n1":   numpy.arange(1, 9.1, 1),
 
     # Pnd: normal diametral pitch (list of discrete choices)
     "Pnd":  [4, 5, 6, 8, 10],
 
     # Np1: pinion teeth
-    "Np1":  range(10, 101, 1),
+    "Np1":  range(10, 101, 4),
 
     # Helix: degrees (floats)
     "Helix": [15, 20, 25],
+
+    # Stage 2 variables (matching ranges)
+    "Np2":  range(10, 101, 4),
+    "Pnd2": [4, 5, 6, 8, 10],
+    "Helix2": [15, 20, 25],
 }
 
 OUT_CSV = "best_per_wp.csv"
@@ -49,25 +54,46 @@ def main():
         params = dict(zip(names, values))
         wp = params["wp"]
 
-        sigma_b = c.bending_stress(**params)
-        sigma_c = c.contact_stress(**params)
+        # Stage 1 stresses (only pass expected args)
+        stage1_keys = ["wp", "n1", "Pnd", "Np1", "Helix"]
+        params_stage1 = {k: params[k] for k in stage1_keys}
+        sigma_b1 = c.bending_stress(**params_stage1)
+        sigma_c1 = c.contact_stress(**params_stage1)
+        pdiff_b1 = fn.distance(sigma_b1, sat)
+        pdiff_c1 = fn.distance(sigma_c1, sac)
 
-        pdiff_b = fn.distance(sigma_b, sat)
-        pdiff_c = fn.distance(sigma_c, sac)
+        # Calculate n2 and wi for stage 2
+        P, Pd, wf, n, n2 = c.important_values(params["wp"], params["n1"], params["Pnd"], params["Np1"], params["Helix"])
+        wi = wf
 
-        # Combined metric (sum of absolute percent diffs)
-        combined_metric = abs(pdiff_b) + abs(pdiff_c)
+        # Stage 2 stresses (only pass expected args, using stage 2 variables)
+        params_stage2 = {
+            "wp": wi,
+            "n1": n2,
+            "Pnd": params["Pnd2"],
+            "Np1": params["Np2"],
+            "Helix": params["Helix2"]
+        }
+        sigma_b2 = c.bending_stress(**params_stage2)
+        sigma_c2 = c.contact_stress(**params_stage2)
+        pdiff_b2 = fn.distance(sigma_b2, sat)
+        pdiff_c2 = fn.distance(sigma_c2, sac)
+
+        # Combined metric (sum of absolute percent diffs for both stages)
+        combined_metric = abs(pdiff_b1) + abs(pdiff_c1) + abs(pdiff_b2) + abs(pdiff_c2)
 
         # Only keep the best (lowest combined_metric) for each wp
         if (wp not in best_per_wp) or (combined_metric < best_per_wp[wp]["combined_metric"]):
             best_per_wp[wp] = {
                 **params,
-                "sigma_bend": sigma_b,
-                "percent_diff": pdiff_b,
-                "abs_percent_diff": abs(pdiff_b),
-                "sigma_contact": sigma_c,
-                "contact_percent_diff": pdiff_c,
-                "abs_contact_percent_diff": abs(pdiff_c),
+                "sigma_bend_stage1": sigma_b1,
+                "percent_diff_bend_stage1": pdiff_b1,
+                "sigma_contact_stage1": sigma_c1,
+                "percent_diff_contact_stage1": pdiff_c1,
+                "sigma_bend_stage2": sigma_b2,
+                "percent_diff_bend_stage2": pdiff_b2,
+                "sigma_contact_stage2": sigma_c2,
+                "percent_diff_contact_stage2": pdiff_c2,
                 "combined_metric": combined_metric
             }
 
@@ -86,8 +112,10 @@ def main():
     with open(OUT_CSV, "w", newline="") as f:
         w = csv.writer(f)
         w.writerow(names + [
-            "sigma_bend", "bending_percent_diff", "abs_bending_percent_diff",
-            "sigma_contact", "contact_percent_diff", "abs_contact_percent_diff",
+            "sigma_bend_stage1", "percent_diff_bend_stage1",
+            "sigma_contact_stage1", "percent_diff_contact_stage1",
+            "sigma_bend_stage2", "percent_diff_bend_stage2",
+            "sigma_contact_stage2", "percent_diff_contact_stage2",
             "combined_metric"
         ])
         for wp in sorted(best_per_wp):
@@ -99,8 +127,10 @@ def main():
                 else:
                     output.append(row[k])
             output += [
-                row["sigma_bend"], row["percent_diff"], row["abs_percent_diff"],
-                row["sigma_contact"], row["contact_percent_diff"], row["abs_contact_percent_diff"],
+                row["sigma_bend_stage1"], row["percent_diff_bend_stage1"],
+                row["sigma_contact_stage1"], row["percent_diff_contact_stage1"],
+                row["sigma_bend_stage2"], row["percent_diff_bend_stage2"],
+                row["sigma_contact_stage2"], row["percent_diff_contact_stage2"],
                 row["combined_metric"]
             ]
             w.writerow(output)

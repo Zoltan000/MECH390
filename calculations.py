@@ -11,16 +11,16 @@ import functools as ft
 @ft.cache
 def important_values(wp,  n1, Pnd, Np1, Helix):
     # Input validation
-    if not (1200 <= wp <= 3600):        #wp = input speed in RPM
-        raise ValueError("wp (input speed) should be between 1200 and 3600 RPM.")
-    if not (1 <= n1 <= 10):             #n1 = stage 1 input ratio
-        raise ValueError("n1 (stage 1 input ratio) should be between 1 and 10.")
+    # if not (1200 <= wp <= 3600):        #wp = input speed in RPM
+        # raise ValueError("wp (input speed) should be between 1200 and 3600 RPM.")
+    # if not (1 <= n1 <= 10):             #n1 = stage 1 input ratio
+        # raise ValueError("n1 (stage 1 input ratio) should be between 1 and 10.")
     # if Pnd not in [4, 5, 6, 8, 10]:     #Pnd = Normal diametral pitch (teeth/inch)
         # raise ValueError("Pnd (Normal diametral pitch) must be one of: 4, 5, 6, 8, 10.")
-    if not (10 <= Np1 <= 100):          #Np1 = pinion teeth number stage 1
-        raise ValueError("Np1 (pinion teeth number stage 1) should be between 10 and 100.")
-    if Helix not in [15, 20, 25]:       #Helix = helix angle (degrees)
-        raise ValueError("Helix (helix angle) should be 15, 20, or 25 degrees.")
+    # if not (10 <= Np1 <= 100):          #Np1 = pinion teeth number stage 1
+        # raise ValueError("Np1 (pinion teeth number stage 1) should be between 10 and 100.")
+    # if Helix not in [15, 20, 25]:       #Helix = helix angle (degrees)
+        # raise ValueError("Helix (helix angle) should be 15, 20, or 25 degrees.")
       
     ''' Important Values '''
     P= wp / 240                                               #input power in HP
@@ -112,10 +112,9 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
     
     st1= c.Ko * c.Ks * Km * c.Kb * Wt1 * Kv * Pd / (F * J)    #Bending stress in ksi
     st1_ = st1 * c.SF * c.Kr / (1000*Yn1)                     #Bending stress for stage 1 in ksi
-    sat = 36.8403
+    # sat = 36.8403
     # print(fn.distance(st1_, sat),'%')
     return st1_                                               # in ksi
-
 
 
 
@@ -145,6 +144,6 @@ def contact_stress(wp,  n1, Pnd, Np1, Helix):
     
     sc1= c.Cp * numpy.sqrt((Wt1 * c.Ko * c.Ks * Km * Kv)/(F * Dp1 * I))                #Contact stress in ksi
     sc1_= sc1 * c.SF * c.Kr / (1000 * Zn1)                                             #Contact stress for stage 1 in ksi
-    sac = 129.242
+    # sac = 129.242
     # print(fn.distance(sc1_, sac),'%')
     return sc1_  # in ksi
