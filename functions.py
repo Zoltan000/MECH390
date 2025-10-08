@@ -2,24 +2,7 @@ import numpy
 import pandas as pd
 from typing import Literal
 
-''' Right now this is useless
-
-def xlookup(lookup_value, csv_path):
-    """
-    Mimics Excel's XLOOKUP: finds lookup_value in the first column and returns the corresponding value from the second column.
-    """
-    df = pd.read_csv(csv_path)
-    lookup_column = df.columns[0]
-    return_column = df.columns[1]
-    match = df[df[lookup_column] == lookup_value]
-    if not match.empty:
-        return match.iloc[0][return_column]
-    else:
-        return None  # or raise an error if preferred
-'''    
-
-
-
 
 def distance(a, b):
     return ((abs(a - b) / ((a + b) / 2)) * 100)
+

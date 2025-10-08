@@ -5,6 +5,8 @@ import lookupTables as lt
 '''Constants that don't change'''
 Ks=1                                 #Size Factor (Assuming Pd always > 5)
 Kb=1                                 #Rim Thickness Factor (Assuming solid gears)
+Cp=2300                              #Elastic Coefficient for steel on steel [sqrt(psi)]
+Pa=20                                #Pressure Angle (degrees)
 
 '''Constants that do change'''
 SF=1                                 #Service Factor (pick a number between 1 and 1.5)
