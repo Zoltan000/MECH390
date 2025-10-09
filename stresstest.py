@@ -13,25 +13,32 @@ sac = 129.242  # <-- Set your allowable contact (pitting) stress here
 
 VARIABLES = {
     # wp: input rpm (integers)
-    "wp":   range(1200, 3601, 200),
+    "wp":   [2250],
 
     # n1: stage 1 ratio (floats)
     "n1":   numpy.arange(1, 9.1, 0.1),
 
     # Pnd: normal diametral pitch (list of discrete choices)
-    "Pnd":  [4, 5, 6, 8, 10],
+    "Pnd":  [10],
 
     # Np1: pinion teeth
-    "Np1":  range(10, 101, 1),
+    "Np1":  range(10, 51, 1),
 
     # Helix: degrees (floats)
-    "Helix": [15, 20, 25],
+    "Helix": [25],
+
+    # Stage 2 variables
+    "Np2":  range(10, 51, 1),
+    "Pnd2": [10],
+    "Helix2": [25],
 }
 
-TOP_K = 5                 # keep the 5 closest to allowable
-OUT_CSV = "top5_bending.csv"  # where to write the winners
+TOP_K = 5                     # keep the 5 closest to allowable
+OUT_CSV = "top5_bending2.csv"  # where to write the winners
 
 # -----------------------------------------------------------
+# Toggle this to enable/disable rejection of over-allowable stresses
+REJECT_IF_OVER_ALLOWABLE = True
 # 4) Search (streaming) — uses a max-heap trick with negatives:
 #    push (-abs_pct_diff, row). If heap grows > K, pop (removes worst).
 # -----------------------------------------------------------
@@ -40,26 +47,56 @@ def main():
     domains = [list(VARIABLES[k]) for k in names]
     combos = itertools.product(*domains)
 
-    heap = []  # will store tuples (combined_metric, bending_pdiff, contact_pdiff, sigma_bend, sigma_contact, checked, params)
+    heap = []  # will store tuples (combined_metric, pdiff_b1, pdiff_c1, sigma_b1, sigma_c1, pdiff_b2, pdiff_c2, sigma_b2, sigma_c2, checked, params)
     checked = 0
     t0 = time.time()
+
 
     for values in combos:
         params = dict(zip(names, values))
 
-        sigma_bend = c.bending_stress(**params)
-        sigma_contact = c.contact_stress(**params)
+        # Stage 1 stresses
+        stage1_keys = ["wp", "n1", "Pnd", "Np1", "Helix"]
+        params_stage1 = {k: params[k] for k in stage1_keys}
+        sigma_b1 = c.bending_stress(**params_stage1)
+        sigma_c1 = c.contact_stress(**params_stage1)
+        pdiff_b1 = fn.distance(sigma_b1, sat)
+        pdiff_c1 = fn.distance(sigma_c1, sac)
 
-        bend_pdiff = fn.distance(sigma_bend, sat)
-        contact_pdiff = fn.distance(sigma_contact, sac)
+        # Calculate n2 and wi for stage 2
+        P, Pd, wf, n, n2 = c.important_values(params["wp"], params["n1"], params["Pnd"], params["Np1"], params["Helix"])
+        wi = wf
 
-        combined_metric = abs(bend_pdiff) + abs(contact_pdiff)
+        # Stage 2 stresses
+        params_stage2 = {
+            "wp": wi,
+            "n1": n2,
+            "Pnd": params["Pnd2"],
+            "Np1": params["Np2"],
+            "Helix": params["Helix2"]
+        }
+        sigma_b2 = c.bending_stress(**params_stage2)
+        sigma_c2 = c.contact_stress(**params_stage2)
+        pdiff_b2 = fn.distance(sigma_b2, sat)
+        pdiff_c2 = fn.distance(sigma_c2, sac)
+
+        # Reject if any stress is above allowable
+        if REJECT_IF_OVER_ALLOWABLE:
+            if (
+                sigma_b1 > sat or sigma_c1 > sac or
+                sigma_b2 > sat or sigma_c2 > sac
+            ):
+                checked += 1
+                continue
+
+        # Combined metric (sum of absolute percent diffs for both stages)
+        combined_metric = abs(pdiff_b1) + abs(pdiff_c1) + abs(pdiff_b2) + abs(pdiff_c2)
         neg_metric = -combined_metric  # Negate for max-heap
 
         if len(heap) < TOP_K:
-            heapq.heappush(heap, (neg_metric, bend_pdiff, contact_pdiff, sigma_bend, sigma_contact, checked, params))
+            heapq.heappush(heap, (neg_metric, pdiff_b1, pdiff_c1, sigma_b1, sigma_c1, pdiff_b2, pdiff_c2, sigma_b2, sigma_c2, checked, params))
         else:
-            heapq.heappush(heap, (neg_metric, bend_pdiff, contact_pdiff, sigma_bend, sigma_contact, checked, params))
+            heapq.heappush(heap, (neg_metric, pdiff_b1, pdiff_c1, sigma_b1, sigma_c1, pdiff_b2, pdiff_c2, sigma_b2, sigma_c2, checked, params))
             if len(heap) > TOP_K:
                 heapq.heappop(heap)
 
@@ -77,11 +114,13 @@ def main():
         w = csv.writer(f)
         w.writerow(
             names +
-            ["sigma_bend", "bending_percent_diff", "abs_bending_percent_diff",
-             "sigma_contact", "contact_percent_diff", "abs_contact_percent_diff",
-             "combined_metric"]
+            [
+                "sigma_bend_stage1", "percent_diff_bend_stage1", "sigma_contact_stage1", "percent_diff_contact_stage1",
+                "sigma_bend_stage2", "percent_diff_bend_stage2", "sigma_contact_stage2", "percent_diff_contact_stage2",
+                "combined_metric"
+            ]
         )
-        for neg_metric, bend_pdiff, contact_pdiff, sigma_bend, sigma_contact, _, params in winners:
+        for neg_metric, pdiff_b1, pdiff_c1, sigma_b1, sigma_c1, pdiff_b2, pdiff_c2, sigma_b2, sigma_c2, _, params in winners:
             row = []
             for k in names:
                 if k == "n1":
@@ -89,9 +128,9 @@ def main():
                 else:
                     row.append(params[k])
             row += [
-                sigma_bend, bend_pdiff, abs(bend_pdiff),
-                sigma_contact, contact_pdiff, abs(contact_pdiff),
-                -neg_metric  # Convert back to positive
+                sigma_b1, pdiff_b1, sigma_c1, pdiff_c1,
+                sigma_b2, pdiff_b2, sigma_c2, pdiff_c2,
+                -neg_metric
             ]
             w.writerow(row)
 
