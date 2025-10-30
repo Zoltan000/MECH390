@@ -78,21 +78,21 @@ try:
     print(f"  Allowable:       {tg.ALLOWABLE_BENDING_STRESS} ksi")
     
     # Calculate percentage difference from allowable
-    bending_diff = fn.distance(bending_stress_1, tg.ALLOWABLE_BENDING_STRESS)
+    bending_pct = ((bending_stress_1 - tg.ALLOWABLE_BENDING_STRESS) / tg.ALLOWABLE_BENDING_STRESS) * 100
     if bending_stress_1 < tg.ALLOWABLE_BENDING_STRESS:
-        print(f"  Status:          ✓ SAFE ({bending_diff:.1f}% below allowable)")
+        print(f"  Status:          ✓ SAFE ({abs(bending_pct):.1f}% below allowable)")
     else:
-        print(f"  Status:          ✗ UNSAFE ({bending_diff:.1f}% above allowable)")
+        print(f"  Status:          ✗ UNSAFE ({bending_pct:.1f}% above allowable)")
     
     print()
     print(f"  Contact Stress:  {contact_stress_1:.2f} ksi")
     print(f"  Allowable:       {tg.ALLOWABLE_CONTACT_STRESS} ksi")
     
-    contact_diff = fn.distance(contact_stress_1, tg.ALLOWABLE_CONTACT_STRESS)
+    contact_pct = ((contact_stress_1 - tg.ALLOWABLE_CONTACT_STRESS) / tg.ALLOWABLE_CONTACT_STRESS) * 100
     if contact_stress_1 < tg.ALLOWABLE_CONTACT_STRESS:
-        print(f"  Status:          ✓ SAFE ({contact_diff:.1f}% below allowable)")
+        print(f"  Status:          ✓ SAFE ({abs(contact_pct):.1f}% below allowable)")
     else:
-        print(f"  Status:          ✗ UNSAFE ({contact_diff:.1f}% above allowable)")
+        print(f"  Status:          ✗ UNSAFE ({contact_pct:.1f}% above allowable)")
     print("-" * 80)
     
     # Calculate Stage 2 parameters
@@ -115,21 +115,21 @@ try:
     print(f"  Bending Stress:  {bending_stress_2:.2f} ksi")
     print(f"  Allowable:       {tg.ALLOWABLE_BENDING_STRESS} ksi")
     
-    bending_diff_2 = fn.distance(bending_stress_2, tg.ALLOWABLE_BENDING_STRESS)
+    bending_pct_2 = ((bending_stress_2 - tg.ALLOWABLE_BENDING_STRESS) / tg.ALLOWABLE_BENDING_STRESS) * 100
     if bending_stress_2 < tg.ALLOWABLE_BENDING_STRESS:
-        print(f"  Status:          ✓ SAFE ({bending_diff_2:.1f}% below allowable)")
+        print(f"  Status:          ✓ SAFE ({abs(bending_pct_2):.1f}% below allowable)")
     else:
-        print(f"  Status:          ✗ UNSAFE ({bending_diff_2:.1f}% above allowable)")
+        print(f"  Status:          ✗ UNSAFE ({bending_pct_2:.1f}% above allowable)")
     
     print()
     print(f"  Contact Stress:  {contact_stress_2:.2f} ksi")
     print(f"  Allowable:       {tg.ALLOWABLE_CONTACT_STRESS} ksi")
     
-    contact_diff_2 = fn.distance(contact_stress_2, tg.ALLOWABLE_CONTACT_STRESS)
+    contact_pct_2 = ((contact_stress_2 - tg.ALLOWABLE_CONTACT_STRESS) / tg.ALLOWABLE_CONTACT_STRESS) * 100
     if contact_stress_2 < tg.ALLOWABLE_CONTACT_STRESS:
-        print(f"  Status:          ✓ SAFE ({contact_diff_2:.1f}% below allowable)")
+        print(f"  Status:          ✓ SAFE ({abs(contact_pct_2):.1f}% below allowable)")
     else:
-        print(f"  Status:          ✗ UNSAFE ({contact_diff_2:.1f}% above allowable)")
+        print(f"  Status:          ✗ UNSAFE ({contact_pct_2:.1f}% above allowable)")
     print("-" * 80)
     
     # Overall validation
