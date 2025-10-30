@@ -15,8 +15,8 @@ sac = 129.242
 # SEARCH SPACE
 # -------------------------
 VARIABLES = {
-    # wp: input rpm (integers) 2250..2250 inclusive step 400
-    "wp":   range(2250, 2251, 400),
+    # wp: input rpm (integers) 1200..33600 inclusive step 20
+    "wp":   range(1200, 3600, 20),
 
     # n1: stage 1 ratio (floats)
     "n1":   numpy.arange(1, 9.1, 0.1),
