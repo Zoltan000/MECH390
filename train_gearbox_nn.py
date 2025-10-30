@@ -51,10 +51,10 @@ np.random.seed(RANDOM_SEED)
 tf.random.set_seed(RANDOM_SEED)
 
 # Training configuration
-EPOCHS = 100                    # Number of times to iterate over the entire dataset
-BATCH_SIZE = 32                 # Number of samples processed before model update
+EPOCHS = 200                    # Number of times to iterate over the entire dataset (increased)
+BATCH_SIZE = 64                 # Number of samples processed before model update (increased for stability)
 VALIDATION_SPLIT = 0.2          # Fraction of data to use for validation (20%)
-LEARNING_RATE = 0.001          # How quickly the model learns (smaller = slower but more precise)
+LEARNING_RATE = 0.0005          # How quickly the model learns (reduced for better convergence)
 
 # Model save path
 MODEL_SAVE_PATH = "gearbox_nn_model.keras"  # Where to save the trained model
@@ -134,10 +134,9 @@ def generate_training_data(num_samples=10000, save_to_csv=True):
         wp = np.random.uniform(*wp_range)     # Input RPM
         P = np.random.uniform(*power_range)    # Power in HP
         
-        # Calculate output speed based on the gear ratios
-        # wf = wp / (n1 * n2), where n2 is calculated from power and speed
-        # For now, we'll use a simplified relationship
-        wf = wp / 12 + 100  # Simplified output speed calculation
+        # Professor's simplified linear relationship for output RPM
+        # (For pedagogical simplicity in class project)
+        wf = wp / 12 + 100  # Simplified linear scaling
         
         try:
             # Calculate stresses for Stage 1 using our existing functions
@@ -161,7 +160,15 @@ def generate_training_data(num_samples=10000, save_to_csv=True):
                 sigma_c2 < ALLOWABLE_CONTACT_STRESS):
                 
                 # This is a valid design! Add it to our dataset
-                X_data.append([wp, wf_calc, P_calc])  # Input features
+                # Calculate derived features to help the model learn
+                total_ratio = n1 * n2  # Total gear reduction ratio
+                
+                # Input features (using professor's simplified relationships):
+                # - Input RPM (wp) - user specifies
+                # - Output RPM (wf) - simplified linear function
+                # - Power (P) - user specifies
+                # - Total gear ratio (derived feature that helps model learn)
+                X_data.append([wp, wf, P, total_ratio])  # Input features
                 y_data.append([n1, Pdn1, Np1, Helix1, Pdn2, Np2, Helix2])  # Output parameters
                 valid_samples += 1
                 
@@ -185,7 +192,7 @@ def generate_training_data(num_samples=10000, save_to_csv=True):
     if save_to_csv:
         # Combine input and output data
         full_data = np.concatenate([X_data, y_data], axis=1)
-        columns = ['Input_RPM', 'Output_RPM', 'Power_HP', 
+        columns = ['Input_RPM', 'Output_RPM', 'Power_HP', 'Total_Ratio',
                    'n1', 'Pdn1', 'Np1', 'Helix1', 'Pdn2', 'Np2', 'Helix2']
         df = pd.DataFrame(full_data, columns=columns)
         csv_filename = 'training_data.csv'
@@ -280,25 +287,36 @@ def build_model(input_dim, output_dim):
         # Input layer - explicitly define input shape
         keras.layers.Input(shape=(input_dim,)),
         
-        # First hidden layer: 128 neurons
+        # First hidden layer: 256 neurons (increased capacity)
         # Dense = fully connected layer (each neuron connects to all previous neurons)
         # ReLU activation = max(0, x), introduces non-linearity
-        keras.layers.Dense(128, activation='relu', name='hidden_layer_1'),
+        keras.layers.Dense(256, name='hidden_layer_1'),
+        keras.layers.BatchNormalization(name='batch_norm_1'),  # Normalize activations
+        keras.layers.Activation('relu', name='activation_1'),
+        keras.layers.Dropout(0.3, name='dropout_1'),  # Increased dropout for better regularization
         
-        # Dropout layer: randomly sets 20% of neurons to 0 during training
-        # This prevents overfitting (memorizing training data)
-        keras.layers.Dropout(0.2, name='dropout_1'),
+        # Second hidden layer: 512 neurons (wider layer to capture complex patterns)
+        keras.layers.Dense(512, name='hidden_layer_2'),
+        keras.layers.BatchNormalization(name='batch_norm_2'),
+        keras.layers.Activation('relu', name='activation_2'),
+        keras.layers.Dropout(0.3, name='dropout_2'),
         
-        # Second hidden layer: 256 neurons (wider layer to capture more features)
-        keras.layers.Dense(256, activation='relu', name='hidden_layer_2'),
-        keras.layers.Dropout(0.2, name='dropout_2'),
+        # Third hidden layer: 256 neurons
+        keras.layers.Dense(256, name='hidden_layer_3'),
+        keras.layers.BatchNormalization(name='batch_norm_3'),
+        keras.layers.Activation('relu', name='activation_3'),
+        keras.layers.Dropout(0.3, name='dropout_3'),
         
-        # Third hidden layer: 128 neurons (narrowing down)
-        keras.layers.Dense(128, activation='relu', name='hidden_layer_3'),
-        keras.layers.Dropout(0.2, name='dropout_3'),
+        # Fourth hidden layer: 128 neurons (narrowing down)
+        keras.layers.Dense(128, name='hidden_layer_4'),
+        keras.layers.BatchNormalization(name='batch_norm_4'),
+        keras.layers.Activation('relu', name='activation_4'),
+        keras.layers.Dropout(0.2, name='dropout_4'),
         
-        # Fourth hidden layer: 64 neurons
-        keras.layers.Dense(64, activation='relu', name='hidden_layer_4'),
+        # Fifth hidden layer: 64 neurons (final feature extraction)
+        keras.layers.Dense(64, name='hidden_layer_5'),
+        keras.layers.BatchNormalization(name='batch_norm_5'),
+        keras.layers.Activation('relu', name='activation_5'),
         
         # Output layer: produces 7 values (our gear parameters)
         # Linear activation (no activation function) for regression
@@ -347,6 +365,13 @@ class StressValidationCallback(keras.callbacks.Callback):
         self.scaler_X = scaler_X
         self.scaler_y = scaler_y
     
+    def _snap_to_valid(self, predicted_value, valid_options):
+        """Helper to snap values to valid discrete options"""
+        valid_options = np.array(valid_options)
+        distances = np.abs(valid_options - predicted_value)
+        closest_idx = np.argmin(distances)
+        return valid_options[closest_idx]
+    
     def on_epoch_end(self, epoch, logs=None):
         """Called at the end of each training epoch"""
         
@@ -365,15 +390,19 @@ class StressValidationCallback(keras.callbacks.Callback):
         valid_count = 0
         total_samples = min(100, len(y_pred))  # Check first 100 samples
         
+        # Define valid discrete values
+        VALID_PDN = [4, 5, 6, 8, 10]
+        VALID_HELIX = [15, 20, 25]
+        
         for i in range(total_samples):
-            # Extract predicted parameters (round discrete values)
+            # Extract predicted parameters with proper constraints
             n1 = float(y_pred[i, 0])
-            Pdn1 = int(round(y_pred[i, 1]))
+            Pdn1 = int(self._snap_to_valid(y_pred[i, 1], VALID_PDN))
             Np1 = int(round(y_pred[i, 2]))
-            Helix1 = int(round(y_pred[i, 3]))
-            Pdn2 = int(round(y_pred[i, 4]))
+            Helix1 = int(self._snap_to_valid(y_pred[i, 3], VALID_HELIX))
+            Pdn2 = int(self._snap_to_valid(y_pred[i, 4], VALID_PDN))
             Np2 = int(round(y_pred[i, 5]))
-            Helix2 = int(round(y_pred[i, 6]))
+            Helix2 = int(self._snap_to_valid(y_pred[i, 6], VALID_HELIX))
             
             # Extract input conditions
             wp = float(X_val_original[i, 0])
@@ -431,7 +460,7 @@ def train_model(model, X_train, X_val, y_train, y_val, scaler_X, scaler_y):
         # Early stopping: stop training if validation loss doesn't improve
         keras.callbacks.EarlyStopping(
             monitor='val_loss',      # Metric to monitor
-            patience=15,             # Stop after 15 epochs without improvement
+            patience=25,             # Stop after 25 epochs without improvement (increased for better convergence)
             restore_best_weights=True,  # Load the best model weights
             verbose=1
         ),
@@ -440,7 +469,7 @@ def train_model(model, X_train, X_val, y_train, y_val, scaler_X, scaler_y):
         keras.callbacks.ReduceLROnPlateau(
             monitor='val_loss',
             factor=0.5,              # Reduce learning rate by half
-            patience=5,              # After 5 epochs without improvement
+            patience=10,             # After 10 epochs without improvement (increased)
             min_lr=1e-7,             # Minimum learning rate
             verbose=1
         ),
@@ -613,6 +642,26 @@ def save_model_and_scalers(model, scaler_X, scaler_y):
 # STEP 8: INFERENCE FUNCTION (Using the Trained Model)
 # =============================================================================
 
+def snap_to_valid_values(predicted_value, valid_options):
+    """
+    Snap a predicted continuous value to the nearest valid discrete option.
+    
+    For parameters that can only take specific discrete values (like Pdn or Helix),
+    this function finds the closest valid option to the model's prediction.
+    
+    Parameters:
+        predicted_value (float): The continuous value predicted by the model
+        valid_options (list): List of valid discrete values
+        
+    Returns:
+        The valid option closest to the predicted value
+    """
+    valid_options = np.array(valid_options)
+    distances = np.abs(valid_options - predicted_value)
+    closest_idx = np.argmin(distances)
+    return valid_options[closest_idx]
+
+
 def predict_gearbox_parameters(input_rpm, output_rpm, power_hp):
     """
     Use the trained model to predict gearbox parameters.
@@ -638,23 +687,29 @@ def predict_gearbox_parameters(input_rpm, output_rpm, power_hp):
     scaler_y.mean_ = scaler_data['scaler_y_mean']
     scaler_y.scale_ = scaler_data['scaler_y_scale']
     
-    # Prepare input
-    X_input = np.array([[input_rpm, output_rpm, power_hp]])
+    # Prepare input with derived feature (total gear ratio estimate)
+    # Initial estimate of total ratio based on input/output speeds
+    total_ratio_estimate = input_rpm / output_rpm if output_rpm > 0 else 10.0
+    X_input = np.array([[input_rpm, output_rpm, power_hp, total_ratio_estimate]])
     X_input_scaled = scaler_X.transform(X_input)
     
     # Make prediction
     y_pred_scaled = model.predict(X_input_scaled, verbose=0)
     y_pred = scaler_y.inverse_transform(y_pred_scaled)[0]
     
-    # Round discrete parameters
+    # Define valid discrete values for constrained parameters
+    VALID_PDN = [4, 5, 6, 8, 10]      # Valid diametral pitch options
+    VALID_HELIX = [15, 20, 25]         # Valid helix angle options (degrees)
+    
+    # Constrain discrete parameters to valid values
     parameters = {
         'n1': float(y_pred[0]),
-        'Pdn1': int(round(y_pred[1])),
+        'Pdn1': int(snap_to_valid_values(y_pred[1], VALID_PDN)),
         'Np1': int(round(y_pred[2])),
-        'Helix1': int(round(y_pred[3])),
-        'Pdn2': int(round(y_pred[4])),
+        'Helix1': int(snap_to_valid_values(y_pred[3], VALID_HELIX)),
+        'Pdn2': int(snap_to_valid_values(y_pred[4], VALID_PDN)),
         'Np2': int(round(y_pred[5])),
-        'Helix2': int(round(y_pred[6]))
+        'Helix2': int(snap_to_valid_values(y_pred[6], VALID_HELIX))
     }
     
     return parameters
@@ -676,7 +731,8 @@ def main():
     start_time = time.time()
     
     # Step 1: Generate training data
-    X_data, y_data = generate_training_data(num_samples=5000, save_to_csv=True)
+    # Increased sample size for better model generalization
+    X_data, y_data = generate_training_data(num_samples=10000, save_to_csv=True)
     
     # Step 2: Preprocess the data
     X_train, X_val, y_train, y_val, scaler_X, scaler_y = preprocess_data(X_data, y_data)
