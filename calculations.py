@@ -23,9 +23,10 @@ def important_values(wp,  n1, Pnd, Np1, Helix):
         # raise ValueError("Helix (helix angle) should be 15, 20, or 25 degrees.")
       
     ''' Important Values '''
-    P= wp / 240                                               #input power in HP
+    nominal = True
+    P= wp / 240 if not nominal else 10                        #input power in HP, if nominal is true then P=10HP
     Pd= Pnd * numpy.cos(numpy.radians(Helix))                 #Diametral pitch in teeth/inch               
-    wf= wp / 12 + 100                                         #Ouput speed in RPM
+    wf= wp / 12 + 100 if not nominal else 250                 #Ouput speed in RPM, if nominal is true then wf=250RPM
     n= wp / wf                                                #overall ratio
     n2= n / n1                                                #stage 2 ratio
 

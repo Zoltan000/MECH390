@@ -15,23 +15,23 @@ sac = 129.242
 # SEARCH SPACE
 # -------------------------
 VARIABLES = {
-    # wp: input rpm (integers) 1200..3600 inclusive step 200
-    "wp":   range(1200, 3601, 400),
+    # wp: input rpm (integers) 2250..2250 inclusive step 400
+    "wp":   range(2250, 2251, 400),
 
     # n1: stage 1 ratio (floats)
-    "n1":   numpy.arange(1, 9.1, 1),
+    "n1":   numpy.arange(1, 9.1, 0.1),
 
     # Pnd: normal diametral pitch (list of discrete choices)
     "Pnd":  [4, 5, 6, 8, 10],
 
     # Np1: pinion teeth
-    "Np1":  range(10, 101, 4),
+    "Np1":  range(10, 101, 1),
 
     # Helix: degrees (floats)
     "Helix": [15, 20, 25],
 
     # Stage 2 variables (matching ranges)
-    "Np2":  range(10, 101, 4),
+    "Np2":  range(10, 101, 1),
     "Pnd2": [4, 5, 6, 8, 10],
     "Helix2": [15, 20, 25],
 }
