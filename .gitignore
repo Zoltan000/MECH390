@@ -16,9 +16,6 @@ ENV/
 *.npz
 *.pkl
 
-# Training outputs
-training_data.csv
-training_history.png
 
 # IDE files
 .vscode/

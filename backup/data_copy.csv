@@ -1,0 +1,2 @@
+wp,n1,Pnd,Np1,Helix,Np2,Pnd2,Helix2,sigma_bend_stage1,percent_diff_bend_stage1,sigma_contact_stage1,percent_diff_contact_stage1,sigma_bend_stage2,percent_diff_bend_stage2,sigma_contact_stage2,percent_diff_contact_stage2,combined_metric
+1200,2.6,10,20,25,42,10,25,16.716419363881762,75.14978839308678,129.01966501173945,0.17217808012694066,31.114336232929915,16.85231232036338,129.12848926781575,0.08786663872171407,92.26214543229882
