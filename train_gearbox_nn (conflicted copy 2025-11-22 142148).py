@@ -36,7 +36,6 @@ import tensorflow as tf                 # Main deep learning framework
 from tensorflow import keras            # High-level neural network API
 from sklearn.model_selection import train_test_split  # For splitting data
 from sklearn.preprocessing import StandardScaler      # For normalizing data
-from sklearn.metrics import r2_score                  # For R^2 calculation
 import matplotlib.pyplot as plt         # For plotting training results
 import itertools                        # For generating parameter combinations
 import time                             # For tracking training time
@@ -57,7 +56,7 @@ tf.random.set_seed(RANDOM_SEED)
 
 # Training configuration
 EPOCHS = 200                    # Number of times to iterate over the entire dataset (increased)
-BATCH_SIZE = 131                # Number of samples processed before model update (increased for stability)
+BATCH_SIZE = 200                # Number of samples processed before model update (increased for stability)
 VALIDATION_SPLIT = 0.2          # Fraction of data to use for validation (20%)
 LEARNING_RATE = 0.0005          # How quickly the model learns (reduced for better convergence)
 
@@ -113,10 +112,9 @@ def load_training_data_from_csv(csv_filename='data.csv'):
     df.columns = df.columns.str.strip()
     print(f"Loaded {len(df)} samples from CSV\n")
 
-    # Required input and output column names (match columns in data.csv)
+    # Required input and output column names
     input_cols = ['wp', 'wf', 'P']
-    # data.csv uses Pd1/Pd2 and Helix1/Helix2 column names
-    output_cols = ['n1', 'Pd1', 'Np1', 'Helix1', 'Pd2', 'Np2', 'Helix2']
+    output_cols = ['n1', 'Pnd', 'Np1', 'Helix', 'Pnd2', 'Np2', 'Helix2']
 
     # Verify required columns exist
     missing_inputs = [c for c in input_cols if c not in df.columns]
@@ -433,16 +431,14 @@ def train_model(model, X_train, X_val, y_train, y_val, scaler_X, scaler_y):
 # STEP 6: EVALUATE AND VISUALIZE RESULTS
 # =============================================================================
 
-def evaluate_model(model, X_train, X_val, y_train, y_val, scaler_y, history):
+def evaluate_model(model, X_val, y_val, scaler_y, history):
     """
     Evaluate the trained model and visualize results.
     
     Parameters:
         model: Trained neural network
-        X_train: Training inputs (scaled)
-        X_val: Validation inputs (scaled)
-        y_train: Training outputs (scaled)
-        y_val: Validation outputs (scaled)
+        X_val: Validation inputs
+        y_val: Validation outputs
         scaler_y: Output scaler for inverse transformation
         history: Training history object
     """
@@ -455,41 +451,25 @@ def evaluate_model(model, X_train, X_val, y_train, y_val, scaler_y, history):
     y_pred_scaled = model.predict(X_val, verbose=0)
     y_pred = scaler_y.inverse_transform(y_pred_scaled)
     y_val_original = scaler_y.inverse_transform(y_val)
-
-    # Make predictions on training set to compute R^2
-    y_train_pred_scaled = model.predict(X_train, verbose=0)
-    y_train_pred = scaler_y.inverse_transform(y_train_pred_scaled)
-    y_train_original = scaler_y.inverse_transform(y_train)
     
-    # Calculate metrics for each output parameter (match data.csv names)
-    parameter_names = ['n1', 'Pd1', 'Np1', 'Helix1', 'Pd2', 'Np2', 'Helix2']
+    # Calculate metrics for each output parameter
+    parameter_names = ['n1', 'Pnd', 'Np1', 'Helix', 'Pnd2', 'Np2', 'Helix2']
     
     print("Prediction Accuracy for Each Parameter:")
     print("-" * 80)
-    r2_list = []
     for i, param_name in enumerate(parameter_names):
         # Calculate Mean Absolute Error (MAE) for this parameter
         mae = np.mean(np.abs(y_pred[:, i] - y_val_original[:, i]))
         # Calculate Mean Absolute Percentage Error (MAPE)
         mape = np.mean(np.abs((y_pred[:, i] - y_val_original[:, i]) / 
                               (y_val_original[:, i] + 1e-10))) * 100
-        # Calculate R^2 on training data for this parameter
-        try:
-            r2_train = r2_score(y_train_original[:, i], y_train_pred[:, i])
-        except Exception:
-            r2_train = float('nan')
-        r2_list.append(r2_train)
-        print(f"{param_name:10s} - MAE: {mae:8.4f}, MAPE: {mape:6.2f}%, R2_train: {r2_train:6.3f}")
+        print(f"{param_name:10s} - MAE: {mae:8.4f}, MAPE: {mape:6.2f}%")
     
     print("\n" + "="*80 + "\n")
     
     # Plot training history
     plot_training_history(history)
     
-    # Also print mean R^2 across parameters for training set
-    mean_r2 = np.nanmean(r2_list) if len(r2_list) > 0 else float('nan')
-    print(f"Mean training R^2 across parameters: {mean_r2:.3f}\n")
-
     # Show some example predictions
     show_example_predictions(y_val_original, y_pred, parameter_names, num_examples=5)
 
@@ -653,13 +633,12 @@ def predict_gearbox_parameters(input_rpm, output_rpm, power_hp):
     VALID_HELIX = [15, 20, 25]         # Valid helix angle options (degrees)
     
     # Constrain discrete parameters to valid values
-    # Return keys that match the training CSV column names
     parameters = {
         'n1': float(y_pred[0]),
-        'Pd1': int(snap_to_valid_values(y_pred[1], VALID_PDN)),
+        'Pdn1': int(snap_to_valid_values(y_pred[1], VALID_PDN)),
         'Np1': int(round(y_pred[2])),
         'Helix1': int(snap_to_valid_values(y_pred[3], VALID_HELIX)),
-        'Pd2': int(snap_to_valid_values(y_pred[4], VALID_PDN)),
+        'Pdn2': int(snap_to_valid_values(y_pred[4], VALID_PDN)),
         'Np2': int(round(y_pred[5])),
         'Helix2': int(snap_to_valid_values(y_pred[6], VALID_HELIX))
     }
@@ -697,8 +676,8 @@ def main():
     # Step 4: Train the model
     history = train_model(model, X_train, X_val, y_train, y_val, scaler_X, scaler_y)
     
-    # Step 5: Evaluate the model (now includes training R^2)
-    evaluate_model(model, X_train, X_val, y_train, y_val, scaler_y, history)
+    # Step 5: Evaluate the model
+    evaluate_model(model, X_val, y_val, scaler_y, history)
     
     # Step 6: Save the model
     save_model_and_scalers(model, scaler_X, scaler_y)

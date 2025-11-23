@@ -1,280 +1,430 @@
-# best_per_wp.py
-# Streams all combinations of (wp, n1, Pnd, Np1, Helix),
-# computes bending stress and % diff to 'sat',
-# and keeps ONLY the single best (smallest |%diff|) per wp (input RPM).
+# data_generator.py
+# For each wp (input RPM), finds the minimum volume gearbox design
+# that satisfies all stress constraints, comparing both 2-stage and 3-stage configurations.
 
-import itertools, math, csv, time, numpy, os, argparse
+import itertools, csv, time, numpy, os, argparse, random
+from concurrent.futures import ProcessPoolExecutor
 import calculations as c
-import functions as fn
 
-# target (allowable) for % diff calc
-sat = 36.8403
-sac = 129.242
+# Maximum allowable stresses
+MAX_BENDING_STRESS = 36.8403  # ksi
+MAX_CONTACT_STRESS = 129.242  # ksi
 
 # -------------------------
 # SEARCH SPACE
 # -------------------------
 VARIABLES = {
-    # wp: input rpm (integers) 1200..33600 inclusive step 100
-    "wp":   range(1200, 3601, 10),
+    # wp: input rpm (integers)
+    "wp":  range(1200, 3601, 100),
 
     # n1: stage 1 ratio (floats)
     "n1":   numpy.arange(1, 9.1, 0.1),
 
-    # Pnd: normal diametral pitch (list of discrete choices)
-    "Pnd":  [8, 10],
+    # Pd: diametral pitch (list of discrete choices)
+    "Pd1":  [4, 5, 6, 8, 10],
 
     # Np1: pinion teeth
-    "Np1":  range(10, 101, 2),
+    "Np1":  range(10, 101, 1),
 
-    # Helix: degrees (floats)
-    "Helix": [25],
+    # Helix1: degrees
+    "Helix1": [15, 20, 25],
 
-    # Stage 2 variables (matching ranges)
-    "Np2":  range(10, 101, 2),
-    "Pnd2": [8, 10],
-    "Helix2": [25],
+    # Stage 2 variables
+    "Np2":  range(10, 101, 1),
+    "Pd2": [4, 5, 6, 8, 10],
+    "Helix2": [15, 20, 25],
+
+    # Stage 3 variables (for 3-stage gearboxes)
+    "n2":   numpy.arange(1, 9.1, 0.1),
+    "Np3":  range(10, 101, 1),
+    "Pd3": [4, 5, 6, 8, 10],
+    "Helix3": [15, 20, 25],
 }
 
-OUT_CSV = "test.csv"
+VALUE_LISTS = {k: list(v) for k, v in VARIABLES.items()}
+TWO_STAGE_KEYS = ("n1", "Pd1", "Np1", "Helix1", "Pd2", "Np2", "Helix2")
+THREE_STAGE_KEYS = ("n1", "Pd1", "Np1", "Helix1", "n2", "Pd2", "Np2", "Helix2", "Pd3", "Np3", "Helix3")
+
+OUT_CSV = "data.csv"
 
 def parse_args():
-    """Parse command line arguments to refine wp resolution and reuse prior results."""
-    p = argparse.ArgumentParser(description="Stream best combo per wp; supports resume and wp refinement.")
-    p.add_argument("--wp-start", type=int, default=1200, help="Start wp (inclusive) when using range mode.")
-    p.add_argument("--wp-stop", type=int, default=3600, help="Stop wp (exclusive) when using range mode.")
-    p.add_argument("--wp-step", type=int, default=10, help="Step for wp in range mode.")
-    p.add_argument("--wp-values", type=str, default="", help="Comma-separated explicit wp values (overrides range mode if set).")
-    p.add_argument("--out-csv", type=str, default=OUT_CSV, help="Output CSV path (defaults to data.csv).")
+    """Parse command line arguments."""
+    p = argparse.ArgumentParser(description="Find minimum volume gearbox designs for each wp.")
+    p.add_argument("--wp-start", type=int, default=1200, help="Start wp (inclusive).")
+    p.add_argument("--wp-stop", type=int, default=3601, help="Stop wp (exclusive).")
+    p.add_argument("--wp-step", type=int, default=10, help="Step for wp.")
+    p.add_argument("--out-csv", type=str, default=OUT_CSV, help="Output CSV path.")
+    p.add_argument("--estimate", action="store_true", help="Estimate total combinations and runtime, then exit.")
+    p.add_argument("--sample-size", type=int, default=100000, help="Number of sample combinations to time when estimating.")
+    p.add_argument("--only-2stage", action="store_true", help="Run only 2-stage search (skip 3-stage). Temporary convenience flag.")
+    p.add_argument("--num-workers", type=int, default=os.cpu_count() or 1, help="Parallel workers (processes).")
+    p.add_argument("--samples-2stage", type=int, default=50000, help="Max combinations to evaluate per-wp for 2-stage. 0 = exhaustive (slow).")
+    p.add_argument("--samples-3stage", type=int, default=50000, help="Max combinations to evaluate per-wp for 3-stage. 0 = exhaustive (slow).")
+    p.add_argument("--seed", type=int, default=1234, help="PRNG seed for sampling.")
     return p.parse_args()
+
+def is_valid_design(stresses):
+    """Check if all stresses are below maximum allowable values."""
+    return all(stress <= max_stress for stress, max_stress in [
+        (stresses[0], MAX_BENDING_STRESS),  # Stage 1 bending
+        (stresses[1], MAX_CONTACT_STRESS),  # Stage 1 contact
+        (stresses[2], MAX_BENDING_STRESS),  # Stage 2 bending
+        (stresses[3], MAX_CONTACT_STRESS),  # Stage 2 contact
+    ] if stress is not None)
+
+
+def _combo_stream(keys, max_samples, rng):
+    """Yield combinations from deterministic sampling or exhaustive product."""
+    if max_samples and max_samples > 0:
+        for _ in range(max_samples):
+            yield tuple(rng.choice(VALUE_LISTS[k]) for k in keys)
+        return
+
+    yield from itertools.product(*(VALUE_LISTS[k] for k in keys))
+
+
+def _eval_2stage(args):
+    wp, combo = args
+    n1, Pd1, Np1, Helix1, Pd2, Np2, Helix2 = combo
+    try:
+        wf, P, volume, s1b, s1c, s2b, s2c, _, _ = c.results(
+            wp, n1, None, Pd1, Np1, Helix1, Pd2, Np2, Helix2, None, None, None
+        )
+    except Exception:
+        return None
+
+    if not is_valid_design([s1b, s1c, s2b, s2c]):
+        return None
+
+    return volume, {
+        'wp': wp, 'wf': wf, 'P': P,
+        'n1': n1, 'Pd1': Pd1, 'Np1': Np1, 'Helix1': Helix1,
+        'Pd2': Pd2, 'Np2': Np2, 'Helix2': Helix2,
+        'n2': None, 'Pd3': None, 'Np3': None, 'Helix3': None,
+        'volume': volume,
+        's1_bending': s1b, 's1_contact': s1c,
+        's2_bending': s2b, 's2_contact': s2c,
+        's3_bending': None, 's3_contact': None,
+        'stages': 2
+    }
+
+
+def _eval_3stage(args):
+    wp, combo = args
+    n1, Pd1, Np1, Helix1, n2, Pd2, Np2, Helix2, Pd3, Np3, Helix3 = combo
+    try:
+        wf, P, volume, s1b, s1c, s2b, s2c, s3b, s3c = c.results(
+            wp, n1, n2, Pd1, Np1, Helix1, Pd2, Np2, Helix2, Pd3, Np3, Helix3
+        )
+    except Exception:
+        return None
+
+    if not is_valid_design([s1b, s1c, s2b, s2c]):
+        return None
+    if s3b is None or s3c is None or s3b > MAX_BENDING_STRESS or s3c > MAX_CONTACT_STRESS:
+        return None
+
+    return volume, {
+        'wp': wp, 'wf': wf, 'P': P,
+        'n1': n1, 'Pd1': Pd1, 'Np1': Np1, 'Helix1': Helix1,
+        'n2': n2, 'Pd2': Pd2, 'Np2': Np2, 'Helix2': Helix2,
+        'Pd3': Pd3, 'Np3': Np3, 'Helix3': Helix3,
+        'volume': volume,
+        's1_bending': s1b, 's1_contact': s1c,
+        's2_bending': s2b, 's2_contact': s2c,
+        's3_bending': s3b, 's3_contact': s3c,
+        'stages': 3
+    }
+
+
+def _parallel_search(wp, combos, eval_fn, workers):
+    """Evaluate combos (optionally in parallel), keeping minimum feasible volume."""
+    best = None
+    best_volume = float('inf')
+    checked = 0
+
+    def _sequential():
+        nonlocal checked, best_volume, best
+        for combo in combos:
+            checked += 1
+            res = eval_fn((wp, combo))
+            if res and res[0] < best_volume:
+                best_volume, best = res
+        return best, checked
+
+    if workers == 1:
+        return _sequential()
+
+    try:
+        with ProcessPoolExecutor(max_workers=workers) as ex:
+            for res in ex.map(eval_fn, ((wp, combo) for combo in combos), chunksize=64):
+                checked += 1
+                if res and res[0] < best_volume:
+                    best_volume, best = res
+        return best, checked
+    except Exception as exc:
+        print(f"    Parallel execution failed for wp={wp} ({exc}); falling back to single-process.")
+        return _sequential()
+
+
+def find_best_2stage(wp, max_samples, workers, rng):
+    combos = _combo_stream(TWO_STAGE_KEYS, max_samples, rng)
+    return _parallel_search(wp, combos, _eval_2stage, workers)
+
+
+def find_best_3stage(wp, max_samples, workers, rng):
+    combos = _combo_stream(THREE_STAGE_KEYS, max_samples, rng)
+    return _parallel_search(wp, combos, _eval_3stage, workers)
+
 
 def main():
     args = parse_args()
     global OUT_CSV
     OUT_CSV = args.out_csv
-    names = list(VARIABLES.keys())
-    assert names[0] == "wp", "Expected 'wp' to be the first variable for per-wp streaming output"
-
-    # Output column order: insert wf and P immediately after wp
-    out_names = [names[0], 'wf', 'P'] + names[1:]
-
-    # Build wp domain from args (explicit list overrides range)
-    if args.wp_values.strip():
-        wp_list = []
-        for token in args.wp_values.split(','):
-            token = token.strip()
-            if not token:
-                continue
-            try:
-                wp_list.append(int(token))
-            except ValueError:
-                raise ValueError(f"Invalid wp value '{token}' in --wp-values")
-        VARIABLES['wp'] = wp_list
-    else:
-        VARIABLES['wp'] = range(args.wp_start, args.wp_stop, args.wp_step)
-
-    # Prepare CSV header (write only if file doesn't exist or is empty)
-    header = out_names + [
-        "sigma_bend_stage1", "percent_diff_bend_stage1",
-        "sigma_contact_stage1", "percent_diff_contact_stage1",
-        "sigma_bend_stage2", "percent_diff_bend_stage2",
-        "sigma_contact_stage2", "percent_diff_contact_stage2",
-        "combined_metric"
+    
+    # Build wp range
+    VARIABLES['wp'] = range(args.wp_start, args.wp_stop, args.wp_step)
+    
+    # CSV header
+    header = [
+        'wp', 'wf', 'P', 'stages', 'volume',
+        'n1', 'Pd1', 'Np1', 'Helix1',
+        'n2', 'Pd2', 'Np2', 'Helix2',
+        'Pd3', 'Np3', 'Helix3',
+        's1_bending', 's1_contact',
+        's2_bending', 's2_contact',
+        's3_bending', 's3_contact'
     ]
-
+    
+    # Check existing wp values to support resume
     existing_wps = set()
-    duplicate_wps = set()
     if os.path.exists(OUT_CSV) and os.path.getsize(OUT_CSV) > 0:
-        # Parse existing wp values to support resume
         with open(OUT_CSV, newline="") as f:
             reader = csv.reader(f)
-            existing_header = next(reader, None)
-            header_ok = existing_header and len(existing_header) == len(header)
-            if not header_ok:
-                print("[WARN] Existing CSV header mismatch; attempting best-effort resume by parsing first column as wp anyway.")
+            next(reader, None)  # skip header
             for row in reader:
-                if not row:
-                    continue
-                try:
-                    wp_val = int(row[0])
-                    if wp_val in existing_wps:
-                        duplicate_wps.add(wp_val)
-                    existing_wps.add(wp_val)
-                except ValueError:
-                    continue
-            if duplicate_wps:
-                print(f"[WARN] Detected duplicate wp rows already in CSV: {sorted(list(duplicate_wps))[:10]}" + (" ..." if len(duplicate_wps) > 10 else ""))
+                if row:
+                    try:
+                        existing_wps.add(int(row[0]))
+                    except (ValueError, IndexError):
+                        continue
     else:
+        # Write header if file doesn't exist
         with open(OUT_CSV, "w", newline="") as f:
             csv.writer(f).writerow(header)
 
-    # Helpers
-    def format_row(row_dict):
-        out = []
-        for k in out_names:
-            # format numeric parameters nicely
-            if k == "n1":
-                out.append(f"{row_dict[k]:.1f}".rstrip('0').rstrip('.') if '.' in f"{row_dict[k]:.1f}" else f"{row_dict[k]:.1f}")
-            elif k in ("wf", "P"):
-                # wf and P should be rounded to 1 decimal already; format accordingly
-                val = row_dict.get(k)
-                out.append(f"{val:.1f}" if isinstance(val, (int, float)) else val)
+    # If user only wants an estimate, compute counts and a rough runtime estimate
+    if args.estimate:
+        def count_items(seq):
+            try:
+                return len(seq)
+            except Exception:
+                return sum(1 for _ in seq)
+
+        n1_len = count_items(VARIABLES['n1'])
+        Pd1_len = count_items(VARIABLES['Pd1'])
+        Np1_len = count_items(VARIABLES['Np1'])
+        Helix1_len = count_items(VARIABLES['Helix1'])
+        Pd2_len = count_items(VARIABLES['Pd2'])
+        Np2_len = count_items(VARIABLES['Np2'])
+        Helix2_len = count_items(VARIABLES['Helix2'])
+        n2_len = count_items(VARIABLES['n2'])
+        Pd3_len = count_items(VARIABLES['Pd3'])
+        Np3_len = count_items(VARIABLES['Np3'])
+        Helix3_len = count_items(VARIABLES['Helix3'])
+
+        two_stage_per_wp = (n1_len * Pd1_len * Np1_len * Helix1_len * Pd2_len * Np2_len * Helix2_len)
+        three_stage_per_wp = (n1_len * Pd1_len * Np1_len * Helix1_len * n2_len * Pd2_len * Np2_len * Helix2_len * Pd3_len * Np3_len * Helix3_len)
+
+        if args.only_2stage:
+            three_stage_per_wp = 0
+
+        try:
+            wp_count = count_items(VARIABLES['wp'])
+        except Exception:
+            wp_count = sum(1 for _ in VARIABLES['wp'])
+
+        per_wp = two_stage_per_wp + three_stage_per_wp
+        total_all = per_wp * wp_count
+        total_remaining = per_wp * max(0, wp_count - len(existing_wps))
+
+        print(f"Estimate mode: per-wp combinations -> 2-stage={two_stage_per_wp:,}, 3-stage={three_stage_per_wp:,}, total={per_wp:,}")
+        print(f"Total wp values: {wp_count:,} (remaining: {max(0, wp_count - len(existing_wps)):,})")
+        print(f"Total combinations (all wp): {total_all:,}")
+        print(f"Total combinations (remaining): {total_remaining:,}")
+
+        # Sample a few random combinations to estimate time per combination
+        samples = max(1, min(args.sample_size, 100000))
+        sample_attempts = 0
+        sample_time = 0.0
+        sample_wp_choices = list(VARIABLES['wp'])
+
+        # Limit max samples if combinations are fewer
+        max_possible = per_wp if per_wp > 0 else 1
+        samples = min(samples, max_possible)
+
+        print(f"Timing {samples} sample combinations to estimate runtime (this may call calculation routines)...")
+
+        for i in range(samples):
+            # pick a random wp and random combination
+            wp_sample = random.choice(sample_wp_choices)
+
+            # choose stage proportional to counts
+            if per_wp == 0:
+                pick_3 = False
             else:
-                out.append(row_dict[k])
-        out += [
-            row_dict["sigma_bend_stage1"], row_dict["percent_diff_bend_stage1"],
-            row_dict["sigma_contact_stage1"], row_dict["percent_diff_contact_stage1"],
-            row_dict["sigma_bend_stage2"], row_dict["percent_diff_bend_stage2"],
-            row_dict["sigma_contact_stage2"], row_dict["percent_diff_contact_stage2"],
-            row_dict["combined_metric"],
-        ]
-        return out
+                pick_3 = random.random() < (three_stage_per_wp / per_wp)
 
-    def _acquire_lock(lock_path, timeout_s=30.0, poll_s=0.1):
-        start = time.time()
-        while True:
-            try:
-                fd = os.open(lock_path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
-                return fd
-            except FileExistsError:
-                if time.time() - start > timeout_s:
-                    raise TimeoutError(f"Timeout acquiring lock {lock_path}")
-                time.sleep(poll_s)
+            if pick_3:
+                # random 3-stage combination
+                n1 = random.choice(list(VARIABLES['n1']))
+                n2 = random.choice(list(VARIABLES['n2']))
+                Pd1 = random.choice(list(VARIABLES['Pd1']))
+                Np1 = random.choice(list(VARIABLES['Np1']))
+                Helix1 = random.choice(list(VARIABLES['Helix1']))
+                Pd2 = random.choice(list(VARIABLES['Pd2']))
+                Np2 = random.choice(list(VARIABLES['Np2']))
+                Helix2 = random.choice(list(VARIABLES['Helix2']))
+                Pd3 = random.choice(list(VARIABLES['Pd3']))
+                Np3 = random.choice(list(VARIABLES['Np3']))
+                Helix3 = random.choice(list(VARIABLES['Helix3']))
 
-    def _release_lock(fd, lock_path):
-        try:
-            os.close(fd)
-        finally:
-            try:
-                os.remove(lock_path)
-            except FileNotFoundError:
-                pass
+                start = time.time()
+                try:
+                    # call results -- exceptions are expected for some combinations
+                    _ = c.results(wp_sample, n1, n2, Pd1, Np1, Helix1, Pd2, Np2, Helix2, Pd3, Np3, Helix3)
+                except Exception:
+                    pass
+                sample_time += (time.time() - start)
+                sample_attempts += 1
+            else:
+                # random 2-stage combination
+                n1 = random.choice(list(VARIABLES['n1']))
+                Pd1 = random.choice(list(VARIABLES['Pd1']))
+                Np1 = random.choice(list(VARIABLES['Np1']))
+                Helix1 = random.choice(list(VARIABLES['Helix1']))
+                Pd2 = random.choice(list(VARIABLES['Pd2']))
+                Np2 = random.choice(list(VARIABLES['Np2']))
+                Helix2 = random.choice(list(VARIABLES['Helix2']))
 
-    def _current_wps_in_file():
-        wps = set()
-        if os.path.exists(OUT_CSV) and os.path.getsize(OUT_CSV) > 0:
-            with open(OUT_CSV, newline="") as f:
-                reader = csv.reader(f)
-                _ = next(reader, None)  # header (may not match exactly)
-                for row in reader:
-                    if not row:
-                        continue
-                    try:
-                        wps.add(int(row[0]))
-                    except ValueError:
-                        continue
-        return wps
+                start = time.time()
+                try:
+                    _ = c.results(wp_sample, n1, None, Pd1, Np1, Helix1, Pd2, Np2, Helix2, None, None, None)
+                except Exception:
+                    pass
+                sample_time += (time.time() - start)
+                sample_attempts += 1
 
-    def append_best(row_dict):
-        # Serialize append across processes and avoid duplicates under concurrency
-        lock_path = OUT_CSV + ".lock"
-        fd = _acquire_lock(lock_path)
-        try:
-            # Refresh existing wps from file to avoid duplicate appends across processes
-            current = _current_wps_in_file()
-            wp_val = int(row_dict["wp"]) if not isinstance(row_dict["wp"], str) else int(float(row_dict["wp"]))
-            if wp_val in current:
-                return False
-            with open(OUT_CSV, "a", newline="") as f:
-                csv.writer(f).writerow(format_row(row_dict))
-            return True
-        finally:
-            _release_lock(fd, lock_path)
+        if sample_attempts == 0 or sample_time == 0.0:
+            print("Unable to measure sample timings; estimation not available.")
+            return
 
-    # Pre-build domains for non-wp variables for efficiency
-    rest_names = names[1:]
-    rest_domains = [list(VARIABLES[k]) for k in rest_names]
+        avg_time = sample_time / sample_attempts
 
-    checked = 0
-    written = len(existing_wps)
-    t0 = time.time()
+        est_seconds = avg_time * total_remaining
 
-    # Iterate wp explicitly so we can skip already-completed ones without iterating their cartesian product
+        def fmt_secs(s):
+            if s < 60:
+                return f"{s:.1f}s"
+            m = s / 60.0
+            if m < 60:
+                return f"{m:.1f}m ({s:.0f}s)"
+            h = m / 60.0
+            if h < 24:
+                return f"{h:.2f}h ({m:.0f}m)"
+            d = h / 24.0
+            if d < 365:
+                return f"{d:.2f}d ({h:.0f}h)"
+            y= d / 365.0
+            return f"{y:.2f}y ({d:.0f}d)"
+
+        print(f"Sampled {sample_attempts} calls, total sample time: {sample_time:.2f}s, avg per-call: {avg_time:.4f}s")
+        print(f"Estimated runtime for remaining {total_remaining:,} combinations: {fmt_secs(est_seconds)}")
+        return
+    
+    print(f"Starting optimization for wp values: {args.wp_start} to {args.wp_stop-1} step {args.wp_step}")
+    print(f"Output file: {OUT_CSV}")
+    print(f"Resuming: skipping {len(existing_wps)} already completed wp values")
+    
+    t_start = time.time()
+    total_checked = 0
+    written = 0
+    
     for wp in VARIABLES['wp']:
         if wp in existing_wps:
-            continue  # resume skip (already present in file)
-
-        # Compute output wf and P for this wp (rounded to 1 decimal)
-        wf_out = round(wp / 12.0 + 100.0, 1)
-        P_out = round(wp / 240.0, 1)
-
-        best_row_for_wp = None
-        # Build combinations for remaining variables
-        for rest_values in itertools.product(*rest_domains):
-            params = {"wp": wp}
-            params.update(dict(zip(rest_names, rest_values)))
-            checked += 1
-
-            # Stage 1 stresses
-            stage1_keys = ["wp", "n1", "Pnd", "Np1", "Helix"]
-            params_stage1 = {k: params[k] for k in stage1_keys}
-            sigma_b1 = c.bending_stress(**params_stage1)
-            sigma_c1 = c.contact_stress(**params_stage1)
-            pdiff_b1 = fn.distance(sigma_b1, sat)
-            pdiff_c1 = fn.distance(sigma_c1, sac)
-
-            # Calculate n2 and wi for stage 2
-            P, Pd, wf, n, n2 = c.important_values(params["wp"], params["n1"], params["Pnd"], params["Np1"], params["Helix"])
-            wi = wf
-
-            params_stage2 = {
-                "wp": wi,
-                "n1": n2,
-                "Pnd": params["Pnd2"],
-                "Np1": params["Np2"],
-                "Helix": params["Helix2"],
-            }
-            sigma_b2 = c.bending_stress(**params_stage2)
-            sigma_c2 = c.contact_stress(**params_stage2)
-            pdiff_b2 = fn.distance(sigma_b2, sat)
-            pdiff_c2 = fn.distance(sigma_c2, sac)
-
-            # Skip any combination where any percent diff is negative (under target)
-            if (pdiff_b1 < 0) or (pdiff_c1 < 0) or (pdiff_b2 < 0) or (pdiff_c2 < 0):
-                continue
-
-            combined_metric = abs(pdiff_b1) + abs(pdiff_c1) + abs(pdiff_b2) + abs(pdiff_c2)
-
-            if (best_row_for_wp is None) or (combined_metric < best_row_for_wp["combined_metric"]):
-                best_row_for_wp = {
-                    **params,
-                    # include computed wf and P for output
-                    "wf": wf_out,
-                    "P": P_out,
-                    "sigma_bend_stage1": sigma_b1,
-                    "percent_diff_bend_stage1": pdiff_b1,
-                    "sigma_contact_stage1": sigma_c1,
-                    "percent_diff_contact_stage1": pdiff_c1,
-                    "sigma_bend_stage2": sigma_b2,
-                    "percent_diff_bend_stage2": pdiff_b2,
-                    "sigma_contact_stage2": sigma_c2,
-                    "percent_diff_contact_stage2": pdiff_c2,
-                    "combined_metric": combined_metric,
-                }
-
-            # Progress print every 100k checked combos
-            if checked % 100000 == 0:
-                elapsed = time.time() - t0
-                rate = checked / max(1.0, elapsed)
-                current_metric = best_row_for_wp["combined_metric"] if best_row_for_wp else float('nan')
-                print(f"checked={checked:,} rate={rate:,.0f}/s wp={wp} best_metric={current_metric:.6f} written={written}")
-
-        # Flush this wp's best row if any valid combo found
-        if best_row_for_wp is not None:
-            appended = append_best(best_row_for_wp)
-            if appended:
-                existing_wps.add(wp)
-                written += 1
+            continue
+        
+        wp_rng = random.Random(args.seed + wp)
+        wp_start = time.time()
+        print(f"\n{'='*60}")
+        print(f"Processing wp = {wp} RPM")
+        
+        # Find best 2-stage design
+        print("  Searching 2-stage designs...")
+        best_2stage, checked_2 = find_best_2stage(wp, args.samples_2stage, args.num_workers, wp_rng)
+        total_checked += checked_2
+        print(f"    Checked {checked_2:,} combinations")
+        if best_2stage:
+            print(f"    Best 2-stage volume: {best_2stage['volume']:.2f} in³")
+        else:
+            print(f"    No valid 2-stage design found")
+        
+        # Find best 3-stage design (allow skipping for 2-stage-only runs)
+        if not args.only_2stage:
+            print("  Searching 3-stage designs...")
+            best_3stage, checked_3 = find_best_3stage(wp, args.samples_3stage, args.num_workers, wp_rng)
+            total_checked += checked_3
+            print(f"    Checked {checked_3:,} combinations")
+            if best_3stage:
+                print(f"    Best 3-stage volume: {best_3stage['volume']:.2f} in³")
             else:
-                print(f"[SKIP] wp {wp} already present at append time; skipped duplicate.")
-
-    elapsed = time.time() - t0
-    # Recount rows in file for accurate total
-    final_wps = _current_wps_in_file()
-    # Guard against elapsed == 0 to avoid ZeroDivisionError on very fast runs
-    rate = (checked / elapsed) if elapsed > 0 else 0.0
-    print(f"\nDone. Checked {checked:,} combinations in {elapsed:.2f}s ({rate:,.0f} combos/s).")
-    print(f"Resume-aware append complete. Total unique wp rows now in CSV: {len(final_wps)}")
+                print(f"    No valid 3-stage design found")
+        else:
+            best_3stage = None
+            checked_3 = 0
+            print("  Skipping 3-stage search (only-2stage set)")
+        
+        # Compare and select the best overall design
+        best_design = None
+        if best_2stage and best_3stage:
+            best_design = best_2stage if best_2stage['volume'] < best_3stage['volume'] else best_3stage
+            print(f"  Winner: {best_design['stages']}-stage design (volume: {best_design['volume']:.2f} in³)")
+        elif best_2stage:
+            best_design = best_2stage
+            print(f"  Winner: 2-stage design (only valid option)")
+        elif best_3stage:
+            best_design = best_3stage
+            print(f"  Winner: 3-stage design (only valid option)")
+        else:
+            print(f"  No valid design found for wp={wp}")
+        
+        # Write to CSV
+        if best_design:
+            row = [
+                best_design['wp'], best_design['wf'], best_design['P'],
+                best_design['stages'], best_design['volume'],
+                best_design['n1'], best_design['Pd1'], best_design['Np1'], best_design['Helix1'],
+                best_design.get('n2', ''), best_design['Pd2'], best_design['Np2'], best_design['Helix2'],
+                best_design.get('Pd3', ''), best_design.get('Np3', ''), best_design.get('Helix3', ''),
+                best_design['s1_bending'], best_design['s1_contact'],
+                best_design['s2_bending'], best_design['s2_contact'],
+                best_design.get('s3_bending', ''), best_design.get('s3_contact', '')
+            ]
+            with open(OUT_CSV, "a", newline="") as f:
+                csv.writer(f).writerow(row)
+            written += 1
+        
+        wp_elapsed = time.time() - wp_start
+        print(f"  Time for this wp: {wp_elapsed:.1f}s")
+    
+    elapsed = time.time() - t_start
+    print(f"\n{'='*60}")
+    print(f"Optimization complete!")
+    print(f"Total combinations checked: {total_checked:,}")
+    print(f"Designs written: {written}")
+    print(f"Total time: {elapsed:.1f}s ({elapsed/60:.1f} min)")
+    if written > 0:
+        print(f"Average time per wp: {elapsed/written:.1f}s")
 
 if __name__ == "__main__":
     main()

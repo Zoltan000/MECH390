@@ -215,10 +215,10 @@ def results(wp,  n1, n2, Pd1, Np1, Helix1, Pd2, Np2, Helix2, Pd3, Np3, Helix3):
     Stage2BendingStress = bending_stress(Pd2, Np2, Helix2, Ng2, Kv2, Wt2, F2, Km2, Nc2)
     Stage2ContactStress = contact_stress(n2, Pd2, Np2, Helix2, Dp2, Kv2, Wt2, F2, Km2, Nc2, Dg2)
 
-    Volume = f.volume(Dp1, Dg1, Dp2, Dg2, None, None, F1, F2, None)
 
     if skipStage3 == True:
-        return wf, P, Volume, Stage1BendingStress, Stage1ContactStress, Stage2BendingStress, Stage2ContactStress # if we only have 2 stages, skip stage 3
+        Volume = f.volume(Dp1, Dg1, Dp2, Dg2, None, None, F1, F2, None)
+        return wf, P, Volume, Stage1BendingStress, Stage1ContactStress, Stage2BendingStress, Stage2ContactStress, None, None# if we only have 2 stages, skip stage 3
     
     ''' Stage 3'''
     wi2 = wi / n2
@@ -226,4 +226,6 @@ def results(wp,  n1, n2, Pd1, Np1, Helix1, Pd2, Np2, Helix2, Pd3, Np3, Helix3):
     Stage3BendingStress = bending_stress(Pd3, Np3, Helix3, Ng3, Kv3, Wt3, F3, Km3, Nc3)
     Stage3ContactStress = contact_stress(n3, Pd3, Np3, Helix3, Dp3, Kv3, Wt3, F3, Km3, Nc3, Dg3)
 
-    return wf, P, Stage1BendingStress, Stage1ContactStress, Stage2BendingStress, Stage2ContactStress, Stage3BendingStress, Stage3ContactStress
+    Volume = f.volume(Dp1, Dg1, Dp2, Dg2, Dp3, Dg3, F1, F2, F3)
+
+    return wf, P, Volume, Stage1BendingStress, Stage1ContactStress, Stage2BendingStress, Stage2ContactStress, Stage3BendingStress, Stage3ContactStress
