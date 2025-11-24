@@ -21,17 +21,17 @@ VARIABLES = {
     "n1":   numpy.arange(1, 9.1, 0.1),
 
     # Pd: diametral pitch (list of discrete choices)
-    "Pd1":  [4, 5, 6, 8, 10],
+    "Pd1":  [8, 10],
 
     # Np1: pinion teeth
-    "Np1":  range(10, 101, 1),
+    "Np1":  range(10, 101, 2),
 
     # Helix1: degrees
-    "Helix1": [15, 20, 25],
+    "Helix1": [20, 25],
 
     # Stage 2 variables
-    "Np2":  range(10, 101, 1),
-    "Pd2": [4, 5, 6, 8, 10],
+    "Np2":  range(10, 101, 2),
+    "Pd2": [6, 8, 10],
     "Helix2": [15, 20, 25],
 
     # Stage 3 variables (for 3-stage gearboxes)
@@ -45,7 +45,7 @@ VALUE_LISTS = {k: list(v) for k, v in VARIABLES.items()}
 TWO_STAGE_KEYS = ("n1", "Pd1", "Np1", "Helix1", "Pd2", "Np2", "Helix2")
 THREE_STAGE_KEYS = ("n1", "Pd1", "Np1", "Helix1", "n2", "Pd2", "Np2", "Helix2", "Pd3", "Np3", "Helix3")
 
-OUT_CSV = "data.csv"
+OUT_CSV = "TEST.csv"
 
 def parse_args():
     """Parse command line arguments."""
@@ -56,7 +56,7 @@ def parse_args():
     p.add_argument("--out-csv", type=str, default=OUT_CSV, help="Output CSV path.")
     p.add_argument("--estimate", action="store_true", help="Estimate total combinations and runtime, then exit.")
     p.add_argument("--sample-size", type=int, default=100000, help="Number of sample combinations to time when estimating.")
-    p.add_argument("--only-2stage", action="store_true", help="Run only 2-stage search (skip 3-stage). Temporary convenience flag.")
+    p.add_argument("--only-2stage", action="store_true", help="Run only 2-stage search (skip 3-stage). Temporary convenience flag.", default=True)
     p.add_argument("--num-workers", type=int, default=os.cpu_count() or 1, help="Parallel workers (processes).")
     p.add_argument("--samples-2stage", type=int, default=50000, help="Max combinations to evaluate per-wp for 2-stage. 0 = exhaustive (slow).")
     p.add_argument("--samples-3stage", type=int, default=50000, help="Max combinations to evaluate per-wp for 3-stage. 0 = exhaustive (slow).")
