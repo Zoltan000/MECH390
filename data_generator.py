@@ -195,14 +195,13 @@ def main():
                 checked += 1
 
                 try:
-                    res = c.results(params["wp"], params["n1"], None,
+                    res = c.results(params["wp"], params["n1"], None,  # type: ignore[attr-defined]
                                     params["Pd1"], params["Np1"], params["Helix"],
                                     params["Pd2"], params["Np2"], params["Helix2"],
                                     None, None, None)
+                    wf_calc, P_calc, Volume_calc, sigma_b1, sigma_c1, sigma_b2, sigma_c2 = res  # type: ignore
                 except Exception:
                     continue
-
-                wf_calc, P_calc, Volume_calc, sigma_b1, sigma_c1, sigma_b2, sigma_c2 = res
 
                 pdiff_b1 = fn.distance(sigma_b1, sat)
                 pdiff_c1 = fn.distance(sigma_c1, sac)
@@ -251,7 +250,7 @@ def main():
                 params.update(dict(zip(rest_names, rest_values)))
                 checked += 1
                 try:
-                    res = c.results(params["wp"], params["n1"], None,
+                    res = c.results(params["wp"], params["n1"], None,  # type: ignore[attr-defined]
                                     params["Pd1"], params["Np1"], params["Helix"],
                                     params["Pd2"], params["Np2"], params["Helix2"],
                                     None, None, None)
@@ -300,14 +299,13 @@ def main():
             params.update(dict(zip(rest_names, rest_values)))
             checked += 1
             try:
-                res = c.results(params["wp"], params["n1"], None,
+                res = c.results(params["wp"], params["n1"], None,  # type: ignore[attr-defined]
                                 params["Pd1"], params["Np1"], params["Helix"],
                                 params["Pd2"], params["Np2"], params["Helix2"],
                                 None, None, None)
+                wf_calc, P_calc, Volume_calc, sigma_b1, sigma_c1, sigma_b2, sigma_c2 = res  # type: ignore
             except Exception:
                 continue
-
-            wf_calc, P_calc, Volume_calc, sigma_b1, sigma_c1, sigma_b2, sigma_c2 = res
 
             pdiff_b1 = fn.distance(sigma_b1, sat)
             pdiff_c1 = fn.distance(sigma_c1, sac)

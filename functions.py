@@ -4,10 +4,8 @@ from typing import Literal
 
 
 def distance(a, b):
-    return ((abs(a - b) / ((a + b) / 2)) * 100)
+    return (((b - a) / ((b + a) / 2)) * 100)
 
-<<<<<<< Updated upstream
-=======
 def volume(Dp1, Dg1, Dp2, Dg2, Dp3, Dg3, F1, F2, F3):
 
     # Dp = Pinion Diameter
@@ -33,4 +31,3 @@ def volume(Dp1, Dg1, Dp2, Dg2, Dp3, Dg3, F1, F2, F3):
 
     volume = width * height * depth  # in cubic inches
     return volume
->>>>>>> Stashed changes
