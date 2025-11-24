@@ -8,6 +8,32 @@ import lookupTables as lt
 from scipy.interpolate import RegularGridInterpolator, interp2d
 import functools as ft
 
+# Precompute interpolation tables once to avoid rebuilding them per-call
+# and ensure input points are numpy arrays sorted in increasing order.
+_J_teeth = numpy.array([20, 30, 60, 150, 500])
+_J_angles = numpy.array([15, 20, 25])
+_J_table = numpy.array([
+    [0.46, 0.46, 0.44],
+    [0.50, 0.49, 0.47],
+    [0.541, 0.53, 0.51],
+    [0.58, 0.56, 0.54],
+    [0.595, 0.58, 0.55]
+])
+
+_K_teeth = numpy.array([20, 30, 50, 75, 150, 500])
+_K_angles = numpy.array([15, 20, 25])
+_K_table = numpy.array([
+    [0.93,  0.935, 0.94],
+    [0.955, 0.96,  0.961],
+    [0.982, 0.983, 0.985],
+    [1.00,  1.00,  1.00],
+    [1.02,  1.02,  1.015],
+    [1.035, 1.032, 1.03],
+])
+
+_interp_func_J = RegularGridInterpolator((_J_teeth, _J_angles), _J_table)
+_interp_func_K = RegularGridInterpolator((_K_teeth, _K_angles), _K_table)
+
 @ft.cache
 def important_values(wp,  n1, Pnd, Np1, Helix):
     # Input validation
@@ -67,42 +93,24 @@ def bending_stress(wp,  n1, Pnd, Np1, Helix):
     Ng1, Dp1, vt1, Kv, Wt1, Px, F, Km, Nc1 = intermediary_calculations(wp,  n1, Pnd, Np1, Helix)  # Call to cache intermediary calculations
 
     ''' Gepmetry factor J calculation '''
-    # J_base 2D interpolation
-    J_teeth= [20, 30, 60, 150, 500]
-    J_angles= [15, 20, 25]
-    J_table= [
-    [0.46, 0.46, 0.44],
-    [0.50, 0.49, 0.47],
-    [0.541, 0.53, 0.51],
-    [0.58, 0.56, 0.54],
-    [0.595, 0.58, 0.55]
-]
-    interp_func_J = RegularGridInterpolator((J_teeth, J_angles), J_table)
-
+    # J_base interpolation uses precomputed interpolator
     def J_base_interp(Np1, Helix):
         if Np1 < 20:
             return 0.4
-        return float(interp_func_J([[Np1, Helix]]))
+        # clamp inputs to grid bounds to avoid extrapolation errors
+        x = float(max(_J_teeth[0], min(_J_teeth[-1], Np1)))
+        y = float(max(_J_angles[0], min(_J_angles[-1], Helix)))
+        return float(_interp_func_J([[x, y]]))
 
     J_base= J_base_interp(Np1, Helix)
 
-    # K 2D interpolation
-    K_teeth  = [20, 30, 50, 75, 150, 500]
-    K_angles = [15, 20, 25]
-    K_table = [
-        [0.93,  0.935, 0.94],
-        [0.955, 0.96,  0.961],
-        [0.982, 0.983, 0.985],
-        [1.00,  1.00,  1.00],
-        [1.02,  1.02,  1.015],
-        [1.035, 1.032, 1.03],
-]
-    interp_func_K = RegularGridInterpolator((K_teeth, K_angles), K_table)
-
+    # K interpolation uses precomputed interpolator
     def k_interp(Ng1, Helix):
         if Ng1 < 20 or Ng1 > 500:
             return 1.04
-        return float(interp_func_K([[Ng1, Helix]]))
+        x = float(max(_K_teeth[0], min(_K_teeth[-1], Ng1)))
+        y = float(max(_K_angles[0], min(_K_angles[-1], Helix)))
+        return float(_interp_func_K([[x, y]]))
 
     K= k_interp(Ng1, Helix)
     

@@ -23,8 +23,10 @@ print("="*80 + "\n")
 
 # Define the operating conditions you want to design for
 input_rpm = 2000      # Input shaft speed in RPM
-output_rpm = 250      # Desired output shaft speed in RPM
-power_hp = 10         # Power in horsepower
+
+# Derive output RPM and power from input_rpm (same linear relations used in training)
+output_rpm = input_rpm / 12 + 100
+power_hp = input_rpm / 240
 
 print(f"Input Conditions:")
 print(f"  - Input RPM:  {input_rpm}")
@@ -34,15 +36,15 @@ print()
 
 # Use the trained model to predict gearbox parameters
 try:
-    predicted_params = tg.predict_gearbox_parameters(input_rpm, output_rpm, power_hp)
+    predicted_params = tg.predict_gearbox_parameters(input_rpm)
     
     print("Predicted Gearbox Parameters:")
     print("-" * 80)
     print(f"  Stage 1 Gear Ratio (n1):        {predicted_params['n1']:.2f}")
-    print(f"  Stage 1 Diametral Pitch (Pdn1): {predicted_params['Pdn1']} teeth/inch")
+    print(f"  Stage 1 Diametral Pitch (Pd1): {predicted_params['Pd1']} teeth/inch")
     print(f"  Stage 1 Pinion Teeth (Np1):     {predicted_params['Np1']} teeth")
     print(f"  Stage 1 Helix Angle (Helix1):   {predicted_params['Helix1']}°")
-    print(f"  Stage 2 Diametral Pitch (Pdn2): {predicted_params['Pdn2']} teeth/inch")
+    print(f"  Stage 2 Diametral Pitch (Pd2): {predicted_params['Pd2']} teeth/inch")
     print(f"  Stage 2 Pinion Teeth (Np2):     {predicted_params['Np2']} teeth")
     print(f"  Stage 2 Helix Angle (Helix2):   {predicted_params['Helix2']}°")
     print("-" * 80)
@@ -63,94 +65,49 @@ print("="*80 + "\n")
 
 # Extract the predicted parameters for Stage 1
 n1 = predicted_params['n1']
-Pdn1 = predicted_params['Pdn1']
+Pd1 = predicted_params['Pd1']
 Np1 = predicted_params['Np1']
 Helix1 = predicted_params['Helix1']
 
 try:
-    # Calculate stresses for Stage 1
-    bending_stress_1 = calc.bending_stress(input_rpm, n1, Pdn1, Np1, Helix1)
-    contact_stress_1 = calc.contact_stress(input_rpm, n1, Pdn1, Np1, Helix1)
-    
+    # Use validation info provided by predict_gearbox_parameters (if available)
+    sigma_b1 = predicted_params.get('sigma_b1')
+    sigma_c1 = predicted_params.get('sigma_c1')
+    sigma_b2 = predicted_params.get('sigma_b2')
+    sigma_c2 = predicted_params.get('sigma_c2')
+    wf = predicted_params.get('wf')
+    n2 = predicted_params.get('n2')
+
     print("Stage 1 Stress Analysis:")
     print("-" * 80)
-    print(f"  Bending Stress:  {bending_stress_1:.2f} ksi")
+    print(f"  Bending Stress:  {sigma_b1:.2f} ksi")
     print(f"  Allowable:       {tg.ALLOWABLE_BENDING_STRESS} ksi")
-    
-    # Calculate percentage difference from allowable
-    bending_pct = ((bending_stress_1 - tg.ALLOWABLE_BENDING_STRESS) / tg.ALLOWABLE_BENDING_STRESS) * 100
-    if bending_stress_1 < tg.ALLOWABLE_BENDING_STRESS:
-        print(f"  Status:          ✓ SAFE ({abs(bending_pct):.1f}% below allowable)")
-    else:
-        print(f"  Status:          ✗ UNSAFE ({bending_pct:.1f}% above allowable)")
-    
-    print()
-    print(f"  Contact Stress:  {contact_stress_1:.2f} ksi")
+    print(f"  Contact Stress:  {sigma_c1:.2f} ksi")
     print(f"  Allowable:       {tg.ALLOWABLE_CONTACT_STRESS} ksi")
-    
-    contact_pct = ((contact_stress_1 - tg.ALLOWABLE_CONTACT_STRESS) / tg.ALLOWABLE_CONTACT_STRESS) * 100
-    if contact_stress_1 < tg.ALLOWABLE_CONTACT_STRESS:
-        print(f"  Status:          ✓ SAFE ({abs(contact_pct):.1f}% below allowable)")
-    else:
-        print(f"  Status:          ✗ UNSAFE ({contact_pct:.1f}% above allowable)")
     print("-" * 80)
-    
-    # Calculate Stage 2 parameters
-    P, Pd, wf, n, n2 = calc.important_values(input_rpm, n1, Pdn1, Np1, Helix1)
-    
-    # Stage 2 validation
-    Pdn2 = predicted_params['Pdn2']
-    Np2 = predicted_params['Np2']
-    Helix2 = predicted_params['Helix2']
-    
-    bending_stress_2 = calc.bending_stress(wf, n2, Pdn2, Np2, Helix2)
-    contact_stress_2 = calc.contact_stress(wf, n2, Pdn2, Np2, Helix2)
-    
-    print("\nStage 2 Stress Analysis:")
+
+    print("Stage 2 Stress Analysis:")
     print("-" * 80)
     print(f"  Intermediate Speed: {wf:.1f} RPM")
     print(f"  Stage 2 Ratio (n2): {n2:.2f}")
-    print(f"  Overall Ratio (n):  {n:.2f}")
-    print()
-    print(f"  Bending Stress:  {bending_stress_2:.2f} ksi")
-    print(f"  Allowable:       {tg.ALLOWABLE_BENDING_STRESS} ksi")
-    
-    bending_pct_2 = ((bending_stress_2 - tg.ALLOWABLE_BENDING_STRESS) / tg.ALLOWABLE_BENDING_STRESS) * 100
-    if bending_stress_2 < tg.ALLOWABLE_BENDING_STRESS:
-        print(f"  Status:          ✓ SAFE ({abs(bending_pct_2):.1f}% below allowable)")
-    else:
-        print(f"  Status:          ✗ UNSAFE ({bending_pct_2:.1f}% above allowable)")
-    
-    print()
-    print(f"  Contact Stress:  {contact_stress_2:.2f} ksi")
-    print(f"  Allowable:       {tg.ALLOWABLE_CONTACT_STRESS} ksi")
-    
-    contact_pct_2 = ((contact_stress_2 - tg.ALLOWABLE_CONTACT_STRESS) / tg.ALLOWABLE_CONTACT_STRESS) * 100
-    if contact_stress_2 < tg.ALLOWABLE_CONTACT_STRESS:
-        print(f"  Status:          ✓ SAFE ({abs(contact_pct_2):.1f}% below allowable)")
-    else:
-        print(f"  Status:          ✗ UNSAFE ({contact_pct_2:.1f}% above allowable)")
+    print(f"  Bending Stress:  {sigma_b2:.2f} ksi")
+    print(f"  Contact Stress:  {sigma_c2:.2f} ksi")
     print("-" * 80)
-    
+
     # Overall validation
     print("\nOverall Design Validation:")
     print("-" * 80)
-    all_safe = (bending_stress_1 < tg.ALLOWABLE_BENDING_STRESS and 
-                contact_stress_1 < tg.ALLOWABLE_CONTACT_STRESS and
-                bending_stress_2 < tg.ALLOWABLE_BENDING_STRESS and 
-                contact_stress_2 < tg.ALLOWABLE_CONTACT_STRESS)
-    
-    if all_safe:
+    if predicted_params.get('valid'):
         print("  ✓✓✓ ALL STRESSES ARE WITHIN ALLOWABLE LIMITS ✓✓✓")
         print("  This is a VALID gearbox design!")
     else:
         print("  ✗✗✗ SOME STRESSES EXCEED ALLOWABLE LIMITS ✗✗✗")
         print("  This design may need modification.")
     print("-" * 80)
-    
+
 except Exception as e:
-    print(f"\n❌ Error during stress calculation: {e}")
-    print("This may happen if the predicted parameters are outside valid ranges.")
+    print(f"\n❌ Error during stress display: {e}")
+    print("This may happen if the predicted parameters are missing validation info.")
 
 # =============================================================================
 # EXAMPLE 3: Multiple Predictions
@@ -174,23 +131,21 @@ for i, scenario in enumerate(scenarios, 1):
     print("-" * 80)
     
     try:
-        params = tg.predict_gearbox_parameters(
-            scenario['input_rpm'], 
-            scenario['output_rpm'], 
-            scenario['power_hp']
-        )
-        
-        print(f"  Input:  {scenario['input_rpm']} RPM, {scenario['output_rpm']} RPM, {scenario['power_hp']} HP")
+        params = tg.predict_gearbox_parameters(scenario['input_rpm'])
+
+        derived_wf = scenario['input_rpm'] / 12 + 100
+        derived_P = scenario['input_rpm'] / 240
+        print(f"  Input:  {scenario['input_rpm']} RPM, {derived_wf:.1f} RPM, {derived_P:.1f} HP")
         print(f"  n1:     {params['n1']:.2f}")
-        print(f"  Pdn1:   {params['Pdn1']}, Np1: {params['Np1']}, Helix1: {params['Helix1']}°")
-        print(f"  Pdn2:   {params['Pdn2']}, Np2: {params['Np2']}, Helix2: {params['Helix2']}°")
+        print(f"  Pd1:   {params['Pd1']}, Np1: {params['Np1']}, Helix1: {params['Helix1']}°")
+        print(f"  Pd2:   {params['Pd2']}, Np2: {params['Np2']}, Helix2: {params['Helix2']}°")
         
         # Quick validation
         n1 = params['n1']
-        bending = calc.bending_stress(scenario['input_rpm'], n1, params['Pdn1'], 
-                                       params['Np1'], params['Helix1'])
-        contact = calc.contact_stress(scenario['input_rpm'], n1, params['Pdn1'], 
-                                      params['Np1'], params['Helix1'])
+        bending = calc.bending_stress(scenario['input_rpm'], n1, params['Pd1'], 
+                           params['Np1'], params['Helix1'])
+        contact = calc.contact_stress(scenario['input_rpm'], n1, params['Pd1'], 
+                          params['Np1'], params['Helix1'])
         
         safe = (bending < tg.ALLOWABLE_BENDING_STRESS and 
                 contact < tg.ALLOWABLE_CONTACT_STRESS)

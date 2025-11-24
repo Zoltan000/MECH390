@@ -9,6 +9,8 @@ __pycache__/
 venv/
 env/
 ENV/
+.venv_py310/
+ann.venv/
 
 # Trained models (these are large and can be regenerated)
 *.keras
