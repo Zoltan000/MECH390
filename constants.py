@@ -10,7 +10,7 @@ Pa=20                                #Pressure Angle (degrees)
 
 '''Constants that do change'''
 SF=1                                 #Service Factor (pick a number between 1 and 1.5)
-L=lt.Design_Life("Electric motors, industrial blowers, general industrial machines")       #design life in [insert unit]
+L=lt.Design_Life("Electric motors, industrial blowers, general industrial machines")       #design life
 Ko=lt.ko_menu("Light", "Light")      #Overload Factor (pick a combination from the table)
 Kr=lt.Kr_menu("0.999")               #Reliability Factor (pick a number from the table)
 

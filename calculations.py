@@ -7,19 +7,6 @@ import functools as ft
 
 @ft.cache
 def important_values(wp,  n1, n2):
-    '''
-    # Input validation
-    if not (1200 <= wp <= 3600):        #wp = input speed in RPM
-        raise ValueError("wp (input speed) should be between 1200 and 3600 RPM.")
-    if not (1 <= n1 <= 10):             #n1 = stage 1 input ratio
-        raise ValueError("n1 (stage 1 input ratio) should be between 1 and 10.")
-    if Pnd not in [4, 5, 6, 8, 10]:     #Pnd = Normal diametral pitch (teeth/inch)
-        raise ValueError("Pnd (Normal diametral pitch) must be one of: 4, 5, 6, 8, 10.")
-    if not (10 <= Np1 <= 100):          #Np1 = pinion teeth number stage 1
-        raise ValueError("Np1 (pinion teeth number stage 1) should be between 10 and 100.")
-    if Helix not in [15, 20, 25]:       #Helix = helix angle (degrees)
-        raise ValueError("Helix (helix angle) should be 15, 20, or 25 degrees.")
-    '''
         
     ''' Important Values '''
     nominal = False
@@ -31,16 +18,6 @@ def important_values(wp,  n1, n2):
         nX= n / n1                                            #where nX is n2 for 2-stage
     else:
         nX = n / (n1 * n2)                                    #where nX is n3 for 3-stage
-
-    '''
-    print(f"\n=== important_values ===")
-    print(f"Inputs: wp={wp}, n1={n1}, Pnd={Pnd}, Np1={Np1}, Helix={Helix}")
-    print(f"P (power) = {P} HP")
-    print(f"Pd (diametral pitch) = {Pd} teeth/inch")
-    print(f"wf (output speed) = {wf} RPM")
-    print(f"n (overall ratio) = {n}")
-    print(f"n2 (stage 2 ratio) = {n2}")
-    '''
 
     return P, wf, nX
 
@@ -68,21 +45,7 @@ def intermediary_calculations(w,  nX, PdX, NpX, HelixX, P):
     Km= 1 + Cma + Cpf
 
     NcX=w * c.L * 60                                           #number of cycles for stage 1
-    '''
-    print(f"\n=== intermediary_calculations ===")
-    print(f"Ng1 (gear teeth stage 1) = {NgX}")
-    print(f"Dg1 (gear pitch diameter stage 1) = {Dgx} inches")
-    print(f"Dp1 (pitch diameter stage 1) = {DpX} inches")
-    print(f"vt1 (pitch line velocity) = {vtX} ft/s")
-    print(f"Kv (dynamic factor) = {Kv}")
-    print(f"Wt1 (tangential load) = {WtX} lbf")
-    print(f"Px (axial pitch) = {Px} inches")
-    print(f"F (face width) = {F} inches")
-    print(f"Cma = {Cma}")
-    print(f"Cpf = {Cpf}")
-    print(f"Km (load distribution factor) = {Km}")
-    print(f"Nc1 (number of cycles stage 1) = {NcX}")
-    '''
+
     return NgX, DpX, Kv, WtX, F, Km, NcX, Dgx
 
 
@@ -137,16 +100,7 @@ def bending_stress( Pd, Np1, Helix, Ng1, Kv, Wt1, F, Km, Nc1):
     
     st1= c.Ko * c.Ks * Km * c.Kb * Wt1 * Kv * Pd / (F * J)    #Bending stress in ksi
     st1_ = st1 * c.SF * c.Kr / (1000*Yn1)                     #Bending stress for stage 1 in ksi
-    '''
-    print(f"\n=== bending_stress ===")
-    print(f"J_base = {J_base}")
-    print(f"K = {K}")
-    print(f"J (geometry factor) = {J}")
-    print(f"Yn1 (bending cycle factor) = {Yn1}")
-    print(f"st1 (raw bending stress) = {st1} ksi")
-    print(f"st1_ (final bending stress) = {st1_} ksi")
-    print(f"Constants: Ko={c.Ko}, Ks={c.Ks}, Kb={c.Kb}, SF={c.SF}, Kr={c.Kr}")
-    '''
+
     return st1_                                               # in ksi
 
 
@@ -175,24 +129,6 @@ def contact_stress(n1, Pd, Np1, Helix, Dp1, Kv, Wt1, F, Km, Nc1, Dgx):
     sc1= c.Cp * numpy.sqrt((Wt1 * c.Ko * c.Ks * Km * Kv)/(F * Dp1 * I))                #Contact stress in ksi
     sc1_= sc1 * c.SF * c.Kr / (1000 * Zn1)                                             #Contact stress for stage 1 in ksi
 
-    '''
-    print(f"\n=== contact_stress ===")
-    print(f"Dg1 (gear pitch diameter stage 1) = {Dg1} inches")
-    print(f"rp (pitch radius pinion) = {rp} inches")
-    print(f"rg (pitch radius gear) = {rg} inches")
-    print(f"Tpressure (transverse pressure angle) = {numpy.degrees(Tpressure)} degrees")
-    print(f"rbp (base radius pinion) = {rbp} inches")
-    print(f"rbg (base radius gear) = {rbg} inches")
-    print(f"Z = {Z}")
-    print(f"cP (circular pitch) = {cP}")
-    print(f"pN (normal pitch) = {pN}")
-    print(f"mN = {mN}")
-    print(f"I (pitting resistance factor) = {I}")
-    print(f"Zn1 (contact cycle factor) = {Zn1}")
-    print(f"sc1 (raw contact stress) = {sc1} ksi")
-    print(f"sc1_ (final contact stress) = {sc1_} ksi")
-    print(f"Constants: Cp={c.Cp}, Ko={c.Ko}, Ks={c.Ks}, SF={c.SF}, Kr={c.Kr}")
-    '''
     return sc1_  # in ksi
 
 def results(wp,  n1, n2, Pd1, Np1, Helix1, Pd2, Np2, Helix2, Pd3, Np3, Helix3):

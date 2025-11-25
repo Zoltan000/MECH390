@@ -2,18 +2,24 @@
 Supervised multi-task training for gearbox parameter prediction.
 
 What this does (high level):
-- Loads a CSV of gearbox examples (inputs + outputs + stresses + volume + validity).
+- Loads a combined CSV of gearbox examples (inputs, outputs, stresses, volume, validity, is_best flag).
 - Trains one neural net with four heads:
-    * params (predicts gear dimensions/angles)
-    * stresses (predicts bending/contact stresses)
-    * volume (predicts gearbox volume)
-    * validity (predicts if stresses are within limits)
-- During training we weight losses so low-volume, near-limit-but-safe designs are favored.
-- At inference we also do a small discrete/local search around the prediction (and nearby brute-force "best" rows) to pick the lowest-volume valid combo.
+    * params: predicts n1, Pd1, Np1, Helix1, Pd2, Np2, Helix2
+    * stresses: predicts s1/s2 bending and contact stresses
+    * volume: predicts gearbox volume
+    * validity: predicts if stresses are within limits
+- During training we scale inputs/targets, weight losses so low-volume and valid designs dominate, and apply a soft stress penalty to encourage riding near allowable limits.
+- At inference we snap discrete outputs, then search nearby brute-force "best" rows and local perturbations to pick the lowest-volume valid combo via calculations.results.
 
 How to run:
     python train_gearbox_supervised.py --train --data combined_data.csv
     python train_gearbox_supervised.py --predict --wp 1800 --wf 250 --power 8
+
+Optional knobs to tune:
+- Stress penalty and loss weights (STRESS_MARGIN_WEIGHT, LOSS_WEIGHTS) to balance stress-limit hugging vs. volume minimization.
+- Sample weights to bias harder toward low-volume and is_best rows for more aggressive compact designs.
+- Refinement search radius and candidate pool (nearest brute-force seeds and local perturbations) for tougher cases.
+- Saved scalers and the registered custom loss so you can reload the model and tweak inference/search without retraining.
 """
 # pyright: reportAttributeAccessIssue=false, reportGeneralTypeIssues=false
 
@@ -47,7 +53,7 @@ ALLOWABLE_BENDING = 36.8403 # ksi
 ALLOWABLE_CONTACT = 129.242 # ksi
 
 # Penalty weight for exceeding allowable stresses (kept soft so we can ride the limit)
-STRESS_MARGIN_WEIGHT = 1.0
+STRESS_MARGIN_WEIGHT = 1.0 #how important is staying under stress limits versus raw mse
 BEST_LOOKUP_PATH = "brute_force_merged.csv"
 
 # Register stress loss globally so saved models can be reloaded
